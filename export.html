@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<body style="font-family:system-ui;padding:24px">
+<button id="dl">Download PNG (128x128)</button>
+
+<script>
+    async function svgToPng() {
+        // Paste raw SVG string here instead of fetching
+        const svgText = `
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F2674A"/>
+      <stop offset="100%" stop-color="#EE4D2D"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="url(#g)"/>
+
+  <!-- Ticket shape with notches (white) -->
+  <g transform="translate(16,20)" filter="url(#soft)">
+    <!-- Create a ticket using even-odd rule to punch circular notches -->
+    <path fill="#FFFFFF" fill-rule="evenodd" d="
+      M12,16 h72 a8,8 0 0 1 8,8 v8
+      a10,10 0 0 0 0,20 v8 a8,8 0 0 1 -8,8 h-72
+      a8,8 0 0 1 -8,-8 v-8 a10,10 0 0 0 0,-20 v-8 a8,8 0 0 1 8,-8 z
+
+      M4,44 a10,10 0 1 0 20,0 a10,10 0 1 0 -20,0 z
+      M80,44 a10,10 0 1 0 20,0 a10,10 0 1 0 -20,0 z
+    "/>
+
+    <!-- Checkmark inside ticket -->
+    <path d="M30 44 l10 10 l22 -22" fill="none" stroke="#20B26C" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
+        `;
+
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(svgBlob);
+
+        const img = new Image();
+        img.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = 128;
+            c.height = 128;
+            const ctx = c.getContext('2d');
+            ctx.drawImage(img, 0, 0, 128, 128);
+            URL.revokeObjectURL(url);
+
+            const a = document.createElement('a');
+            a.download = 'icon.png';
+            a.href = c.toDataURL('image/png');
+            a.click();
+        };
+        img.src = url;
+    }
+
+    document.getElementById('dl').onclick = svgToPng;
+</script>
+</body>
+</html>

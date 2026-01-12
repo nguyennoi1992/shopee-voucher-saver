@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Shopee Voucher Saver",
+  "description": "Auto-click all Shopee vouchers (Lưu).",
+  "version": "1.0",
+  "permissions": [
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://shopee.vn/*",
+    "*://*.shopee.vn/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Save Shopee Vouchers",
+    "default_icon": "icon.png"
+  },
+  "icons": {
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
