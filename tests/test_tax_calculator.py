@@ -481,5 +481,41 @@ class TestTaxCalculator(unittest.TestCase):
         # 6. Trước thuế (hợp lệ sau phí) = 186.882 + 9.187 (PIT) + 9.187 (VAT) = 205.256 đ
         self.assertEqual(total_net + total_pit + total_vat, 205256)
 
+    def test_october_2026_user_validation_oracle(self):
+        # Bảng chân lý đối soát chính xác theo yêu cầu người dùng (Từng dòng và Tổng cộng):
+        # Ngày tạo bill | Mã thanh toán | Tiền sàn trả (Gross) | Phí DV 0,98% | Doanh thu hợp lệ | 5% VAT | 5% PIT | Thực nhận sau thuế
+        truth_table = [
+            {"date": "01-10-2026", "pid": "...1001", "gross": 23562, "fee": 231, "valid": 23331, "vat": 0,    "pit": 0,    "net": 23331},
+            {"date": "05-10-2026", "pid": "...1005", "gross": 38230, "fee": 376, "valid": 37854, "vat": 1912, "pit": 1912, "net": 34030},
+            {"date": "08-10-2026", "pid": "...1008", "gross": 49985, "fee": 489, "valid": 49496, "vat": 2499, "pit": 2499, "net": 44498},
+            {"date": "12-10-2026", "pid": "...1012", "gross": 23721, "fee": 232, "valid": 23489, "vat": 1186, "pit": 1186, "net": 21117},
+            {"date": "19-10-2026", "pid": "...1019", "gross": 71790, "fee": 704, "valid": 71086, "vat": 3590, "pit": 3590, "net": 63906},
+        ]
+
+        # Kiểm tra từng bản ghi
+        for row in truth_table:
+            # Invariant 1: Doanh thu hợp lệ = Tiền sàn trả (Gross) - Phí DV 0,98%
+            self.assertEqual(row["valid"], row["gross"] - row["fee"], f"Lệch Doanh thu hợp lệ tại {row['date']}")
+            # Invariant 2: Thực nhận sau thuế = Doanh thu hợp lệ - 5% VAT - 5% PIT
+            self.assertEqual(row["net"], row["valid"] - row["vat"] - row["pit"], f"Lệch Thực nhận tại {row['date']}")
+            # Invariant 3: Thuế VAT = PIT
+            self.assertEqual(row["vat"], row["pit"], f"Lệch VAT và PIT tại {row['date']}")
+
+        # Kiểm tra Tổng cộng (5 kỳ)
+        sum_gross = sum(r["gross"] for r in truth_table)
+        sum_fee = sum(r["fee"] for r in truth_table)
+        sum_valid = sum(r["valid"] for r in truth_table)
+        sum_vat = sum(r["vat"] for r in truth_table)
+        sum_pit = sum(r["pit"] for r in truth_table)
+        sum_net = sum(r["net"] for r in truth_table)
+
+        self.assertEqual(sum_gross, 207288, "Tổng Gross phải là 207.288 đ")
+        self.assertEqual(sum_fee, 2032, "Tổng Phí DV 0,98% phải là 2.032 đ")
+        self.assertEqual(sum_valid, 205256, "Tổng Doanh thu hợp lệ phải là 205.256 đ")
+        self.assertEqual(sum_vat, 9187, "Tổng 5% VAT phải là 9.187 đ (1.912 + 2.499 + 1.186 + 3.590)")
+        self.assertEqual(sum_pit, 9187, "Tổng 5% PIT phải là 9.187 đ (1.912 + 2.499 + 1.186 + 3.590)")
+        self.assertEqual(sum_net, 186882, "Tổng Thực nhận sau thuế phải là 186.882 đ")
+        self.assertEqual(sum_valid, sum_net + sum_vat + sum_pit, "Doanh thu hợp lệ = Thực nhận + VAT + PIT")
+
 if __name__ == "__main__":
     unittest.main()

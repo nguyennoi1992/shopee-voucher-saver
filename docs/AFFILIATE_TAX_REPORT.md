@@ -144,6 +144,23 @@ Extension hỗ trợ đồng bộ và nhận diện tự động cả 2 nguồn 
      * **Tổng doanh thu hợp lệ trước thuế** = `186.882 + 18.374` = **205.256 đ** *(Lưu ý: Nếu chỉ cộng 1 khoản thuế 9.187 như nháp nhanh thì ra 196.069 đ, nhưng thực tế Shopee khấu trừ cả VAT 9.187 đ và PIT 9.187 đ nên tổng trước thuế chuẩn kế toán là 205.256 đ)*.
      * **Tổng tiền sàn trả cơ sở (Gross)** = **207.288 đ** *(trước phí dịch vụ sàn 0.98% là 2.032 đ)*.
 
+   * **Bảng chân lý kiểm định công thức (Validation Oracle 10/2026)**:
+
+| Ngày tạo bill | Mã thanh toán | Tiền sàn trả (Gross) | Phí DV 0,98% | Doanh thu hợp lệ | 5% VAT | 5% PIT (TNCN) | Thực nhận sau thuế |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **01-10-2026** | `...1001` | 23.562 đ | 231 đ | 23.331 đ | 0 đ | 0 đ | **23.331 đ** |
+| **05-10-2026** | `...1005` | 38.230 đ | 376 đ | 37.854 đ | 1.912 đ | 1.912 đ | **34.030 đ** |
+| **08-10-2026** | `...1008` | 49.985 đ | 489 đ | 49.496 đ | 2.499 đ | 2.499 đ | **44.498 đ** |
+| **12-10-2026** | `...1012` | 23.721 đ | 232 đ | 23.489 đ | 1.186 đ | 1.186 đ | **21.117 đ** |
+| **19-10-2026** | `...1019` | 71.790 đ | 704 đ | 71.086 đ | 3.590 đ | 3.590 đ | **63.906 đ** |
+| **TỔNG CỘNG** | **5 kỳ** | **207.288 đ** | **2.032 đ** | **205.256 đ** | **9.187 đ** | **9.187 đ** | **186.882 đ** |
+
+   * **Các hệ thức kiểm định bất biến (Invariants)**:
+     1. `Doanh thu hợp lệ` = `Tiền sàn trả (Gross)` - `Phí DV 0,98%`: `207.288 đ - 2.032 đ = 205.256 đ`
+     2. `Thực nhận sau thuế` = `Doanh thu hợp lệ` - `5% VAT` - `5% PIT`: `205.256 đ - 9.187 đ - 9.187 đ = 186.882 đ`
+     3. `Doanh thu trước thuế (Hợp lệ)` = `Thực nhận sau thuế` + `5% VAT` + `5% PIT`: `186.882 đ + 9.187 đ + 9.187 đ = 205.256 đ`
+     4. Riêng kỳ **01-10-2026** chưa trừ thuế PIT và VAT (thuộc doanh thu cuối tháng 9 dưới ngưỡng khấu trừ): VAT = 0 đ, PIT = 0 đ, Thực nhận = 23.331 đ.
+
 2. **Theo Ngày hoàn thành đơn hàng (`payment/billing` - Khuyên dùng cho Kê khai ngày phát sinh)**:
    * **Nguồn API**: `/api/v3/payment/billing_list` lọc theo `order_completed_period_start_time`.
    * **Bản chất**: Phản ánh ngày phát sinh hoa hồng từ đơn hàng thực tế của người mua (Ngày 1, 2, ..., 31) để xuất file Excel/CSV kê khai thuế theo ngày.
