@@ -439,7 +439,6 @@ function updateAffiliateSummaryMetrics() {
 
     const gross = parseFloat(it.eligible_total_amount_dis || 0) || 0;
     const mcn = parseFloat(it.mcn_management_fee_dis || 0) || 0;
-    const afterMcn = gross - mcn;
     const billTotal = parseFloat(it.total_payment_amount_dis || 0) || 0;
 
     // Chi tiết thuế PIT (TNCN), VAT (GTGT) và phí dịch vụ từ API thực tế
@@ -455,72 +454,24 @@ function updateAffiliateSummaryMetrics() {
       }
     }
 
-    let feeDv = 0;
-    let tax = 0;
-    let taxVangLai = 0;
-    let taxVat = 0;
-    let taxPitKd = 0;
-    let bill = 0;
-    let netTk = 0;
-
-    // Từ tháng 10/2026: Shopee chính thức tách riêng thuế: 5% VAT và 5% PIT, không thu phí DV 0.98%
-    if (m >= "2026-10") {
-      feeDv = feeAmt > 0 ? feeAmt : 0;
-      taxVangLai = 0;
-      taxVat = vatAmt > 0 ? vatAmt : Math.round(afterMcn * 0.05);
-      taxPitKd = whtAmt > 0 ? whtAmt : Math.round(afterMcn * 0.05);
-      tax = taxVat + taxPitKd;
-      bill = afterMcn - feeDv;
-      netTk = billTotal > 0 ? billTotal : (bill - tax);
-    } else {
-      // Trước tháng 10/2026: Lấy chính xác số tiền thuế và phí thực tế từ API Shopee
-      // Chỉ khi trên bill thực tế có số tiền khấu trừ whtAmt > 0 mới tính thuế TNCN
-      // Khi thu nhập dưới ngưỡng khấu trừ (dưới 2 triệu/kỳ chi trả), Shopee không trừ thuế -> whtAmt = 0 đ!
-      taxVangLai = whtAmt > 0 ? whtAmt : 0;
-      taxVat = vatAmt > 0 ? vatAmt : 0;
-      taxPitKd = 0;
-      tax = taxVangLai + taxVat + taxPitKd;
-
-      feeDv = feeAmt > 0 ? feeAmt : 0;
-      bill = billTotal > 0 ? billTotal : (afterMcn - feeDv);
-      netTk = billTotal > 0 ? billTotal : (bill - tax);
-    }
-
     if (!monthlyMap[m]) {
       monthlyMap[m] = {
         month: m,
         gross: 0,
         mcn: 0,
-        afterMcn: 0,
-        feeDv: 0,
-        bill: 0,
-        taxVangLai: 0,
-        taxVat: 0,
-        taxPitKd: 0,
-        netTk: 0
+        billTotal: 0,
+        wht: 0,
+        vat: 0,
+        fee: 0
       };
     }
 
     monthlyMap[m].gross += gross;
     monthlyMap[m].mcn += mcn;
-    monthlyMap[m].afterMcn += afterMcn;
-    monthlyMap[m].feeDv += feeDv;
-    monthlyMap[m].bill += bill;
-    monthlyMap[m].taxVangLai += taxVangLai;
-    monthlyMap[m].taxVat += taxVat;
-    monthlyMap[m].taxPitKd += taxPitKd;
-    monthlyMap[m].netTk += netTk;
-
-    totalGross += gross;
-    totalNet += netTk;
-    totalTax += tax;
-    totalMcn += mcn;
-    totalAfterMcn += afterMcn;
-    totalFeeDv += feeDv;
-    totalBill += bill;
-    totalTaxVangLai += taxVangLai;
-    totalTaxVat += taxVat;
-    totalTaxPitKd += taxPitKd;
+    monthlyMap[m].billTotal += billTotal;
+    monthlyMap[m].wht += whtAmt;
+    monthlyMap[m].vat += vatAmt;
+    monthlyMap[m].fee += feeAmt;
 
     const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
     dailyList.push({
@@ -530,13 +481,69 @@ function updateAffiliateSummaryMetrics() {
     });
   }
 
+  // Đồng bộ tính toán theo tháng và theo tab đảm bảo khớp chuẩn kế toán
+  const sortedMonths = Object.keys(monthlyMap).sort();
+  for (const m of sortedMonths) {
+    const data = monthlyMap[m];
+    const gross = data.gross;
+    const mcn = data.mcn;
+    const afterMcn = gross - mcn;
+    const isOctober2026Onwards = m >= "2026-10";
+
+    let feeDv = 0;
+    let wht10 = 0;
+    let vat5 = 0;
+    let tncnKd5 = 0;
+
+    if (isOctober2026Onwards) {
+      // Từ 10/2026: Tách 5% VAT và 5% PIT, 10% vãng lai = 0, Bỏ phí dịch vụ 0.98%
+      feeDv = data.fee > 0 ? data.fee : 0;
+      wht10 = 0;
+      vat5 = data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
+      tncnKd5 = data.wht > 0 ? data.wht : Math.round(afterMcn * 0.05);
+    } else {
+      // Trước 10/2026: Shopee trừ phí dịch vụ 0.98% trực tiếp vào billTotal
+      if (data.fee > 0) {
+        feeDv = data.fee;
+      } else if (data.billTotal > 0 && afterMcn > data.billTotal) {
+        feeDv = Math.round(afterMcn - data.billTotal);
+      } else {
+        feeDv = 0;
+      }
+      wht10 = data.wht > 0 ? data.wht : 0;
+      vat5 = data.vat > 0 ? data.vat : 0;
+      tncnKd5 = 0;
+    }
+
+    const billReal = afterMcn - feeDv;
+    const netTk = billReal - wht10 - vat5 - tncnKd5;
+    const taxMonth = wht10 + vat5 + tncnKd5;
+
+    data.afterMcn = afterMcn;
+    data.feeDv = feeDv;
+    data.bill = billReal;
+    data.taxVangLai = wht10;
+    data.taxVat = vat5;
+    data.taxPitKd = tncnKd5;
+    data.netTk = netTk;
+
+    totalGross += gross;
+    totalMcn += mcn;
+    totalAfterMcn += afterMcn;
+    totalFeeDv += feeDv;
+    totalBill += billReal;
+    totalTaxVangLai += wht10;
+    totalTaxVat += vat5;
+    totalTaxPitKd += tncnKd5;
+    totalTax += taxMonth;
+    totalNet += netTk;
+  }
+
   // Update summary cards
   affiliateTotalGross.textContent = formatCurrency(totalGross);
   affiliateNetTk.textContent = formatCurrency(totalNet);
   affiliateTaxTotal.textContent = formatCurrency(totalTax);
 
-  // Render Simple Table & Full Table
-  const sortedMonths = Object.keys(monthlyMap).sort();
   if (sortedMonths.length === 0) {
     affSimpleTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
     affSimpleTfoot.innerHTML = "";

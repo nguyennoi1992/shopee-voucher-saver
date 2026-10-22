@@ -90,19 +90,25 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
   * **Không trừ phí dịch vụ 0,98%** trên các khoản thanh toán đối soát mới.
   * **Thực nhận về TK = 90%** của Doanh thu hợp lệ sau MCN (`Sau MCN` - `5% VAT` - `5% PIT`). Khớp 100% với mục *"Tổng thanh toán sau thuế"* trên trang chi tiết khoản thanh toán của Shopee.
 
-### 3.2. Bảng quy chuẩn các khoản mục
+### 3.2. Bảng quy chuẩn các khoản mục & Đồng bộ tính toán giữa các Tab
+
+Để đảm bảo tính nhất quán và chuẩn mực kế toán 100% giữa **Popup Extension**, trang **Sổ tay thuế toàn màn hình**, và giữa các chế độ xem (**Đơn giản**, **Chi tiết 10 cột**, **Bảng kê theo ngày**):
+
+* **Hệ thống luôn bảo toàn 2 bất đẳng thức kế toán cơ bản ở từng dòng tháng và dòng Tổng cộng**:
+  1. `Sau MCN` - `Phí DV 0,98%` = `Thực nhận theo bill`
+  2. `Thực nhận theo bill` - `10% TNCN (vãng lai)` - `5% GTGT` - `5% TNCN (KD)` = `Ước thực về TK`
 
 | Khoản mục | Quy tắc tính trước 10/2026 | Quy tắc tính từ 10/2026 | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| **Doanh thu (HH gộp)** | Tổng `eligible_total_amount_dis` | Tổng `eligible_total_amount_dis` | Tiền sàn trả chưa trừ bất kỳ phí hay thuế nào. |
+| **Doanh thu (HH gộp)** | Tổng `eligible_total_amount_dis` | Tổng `eligible_total_amount_dis` | Tiền sàn trả chưa trừ bất kỳ phí hay thuế nào. Khớp với tổng doanh thu theo ngày. |
 | **Phí MCN** | `mcn_management_fee_dis` | `mcn_management_fee_dis` | Phí quản lý mạng lưới nếu có tham gia MCN. |
-| **Sau MCN** | `HH gộp` - `Phí MCN` | `HH gộp` - `Phí MCN` | Căn cứ tính thuế và thanh toán. |
-| **Phí DV 0,98%** | Lấy theo `service_fee_dis` từ API (hoặc chênh lệch nếu có) | **0 đ** | Shopee không trừ phí DV 0,98% từ 10/2026. |
-| **Thực nhận bill** | Bằng `total_payment_amount_dis` (hoặc `Sau MCN - Phí DV`) | Bằng chính `Sau MCN` | Doanh thu trước khi trừ các khoản thuế. |
-| **10% TNCN (vãng lai)** | Theo `wht_amount_dis` từ API (**0 đ** nếu dưới ngưỡng) | **0 đ** | Đã tách riêng thành VAT và PIT. |
-| **5% GTGT** | 0 đ (hoặc 5% nếu HKD) | **5%** (hoặc theo bill VAT) | Thuế GTGT khấu trừ tại nguồn. |
-| **5% TNCN (KD/PIT)** | 0 đ (hoặc 5% nếu HKD) | **5%** (hoặc theo bill PIT) | Thuế TNCN khấu trừ tại nguồn. |
-| **Ước thực về TK** | Bằng `total_payment_amount_dis` thực tế từ API | `Sau MCN` × 90% | Khớp chính xác 100% "Tổng thanh toán sau thuế". |
+| **Sau MCN** | `HH gộp` - `Phí MCN` | `HH gộp` - `Phí MCN` | Số tiền cơ sở sau khi trừ MCN. |
+| **Phí DV 0,98%** | Lấy theo `service_fee_dis` hoặc chênh lệch giữa `Sau MCN` và `billTotal` | **0 đ** | Shopee không trừ phí DV 0,98% từ 10/2026. |
+| **Thực nhận bill** | `Sau MCN` - `Phí DV 0,98%` | Bằng chính `Sau MCN` | Doanh thu trước khi trừ các khoản thuế khấu trừ tại nguồn. |
+| **10% TNCN (vãng lai)** | Theo `wht_amount_dis` từ API (**0 đ** nếu dưới ngưỡng) | **0 đ** | Từ 10/2026 đã tách riêng thành 5% VAT và 5% PIT. |
+| **5% GTGT** | 0 đ (hoặc 5% nếu chọn chế độ HKD) | **5%** (hoặc theo `vat_amount_dis`) | Thuế GTGT khấu trừ tại nguồn. |
+| **5% TNCN (KD/PIT)** | 0 đ (hoặc 5% nếu chọn chế độ HKD) | **5%** (hoặc theo `wht_amount_dis`) | Thuế TNCN khấu trừ tại nguồn. |
+| **Ước thực về TK** | `Thực nhận bill` - các loại thuế khấu trừ | `Thực nhận bill` - `5% VAT` - `5% PIT` | Khớp chính xác giữa Tab Đơn giản, Tab Chi tiết và Card Thống kê. |
 
 ### 3.3. Cơ chế Hóa đơn phí dịch vụ (service_fee_invoice) & Đối soát thanh toán
 

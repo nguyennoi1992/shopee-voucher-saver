@@ -357,27 +357,31 @@
       if (isOctober2026Onwards) {
         // Giai đoạn từ 10/2026: Tách 5% VAT và 5% PIT, 10% vãng lai = 0, Phí DV 0.98% = 0
         feeDv = (data && data.fee > 0) ? data.fee : 0;
+        billReal = afterMcn - feeDv;
+        wht10 = 0;
         vat5 = (data && data.vat > 0) ? data.vat : Math.round(afterMcn * 0.05);
         tncnKd5 = (data && data.wht > 0) ? data.wht : Math.round(afterMcn * 0.05);
-        wht10 = 0;
-        billReal = afterMcn - feeDv;
-        netTk = (data && data.billTotal > 0) ? data.billTotal : (billReal - vat5 - tncnKd5);
+        netTk = billReal - vat5 - tncnKd5;
       } else {
         // Giai đoạn trước 10/2026:
+        // Shopee trừ phí dịch vụ nền tảng 0.98% trực tiếp vào billTotal
+        if (data && data.fee > 0) {
+          feeDv = data.fee;
+        } else if (data && data.billTotal > 0 && afterMcn > data.billTotal) {
+          feeDv = Math.round(afterMcn - data.billTotal);
+        } else {
+          feeDv = 0;
+        }
+        billReal = afterMcn - feeDv;
+
         if (taxMode === "hkd") {
           vat5 = (data && data.vat > 0) ? data.vat : Math.round(afterMcn * 0.05);
           tncnKd5 = (data && data.wht > 0) ? data.wht : Math.round(afterMcn * 0.05);
           wht10 = 0;
-          feeDv = (data && data.fee > 0) ? data.fee : 0;
-          billReal = afterMcn - feeDv;
-          netTk = (data && data.billTotal > 0) ? data.billTotal : (billReal - vat5 - tncnKd5);
         } else if (taxMode === "individual") {
           wht10 = (data && data.wht > 0) ? data.wht : 0;
           vat5 = 0;
           tncnKd5 = 0;
-          feeDv = (data && data.fee > 0) ? data.fee : 0;
-          billReal = (data && data.billTotal > 0) ? data.billTotal : (afterMcn - feeDv);
-          netTk = (data && data.billTotal > 0) ? data.billTotal : (billReal - wht10);
         } else {
           // "actual": Lấy chính xác dữ liệu thực tế từ API Shopee trả về
           // Chỉ hiển thị thuế TNCN khi trên bill thực tế có trừ (data.wht > 0)
@@ -385,10 +389,8 @@
           wht10 = (data && data.wht > 0) ? data.wht : 0;
           vat5 = (data && data.vat > 0) ? data.vat : 0;
           tncnKd5 = 0;
-          feeDv = (data && data.fee > 0) ? data.fee : 0;
-          billReal = (data && data.billTotal > 0) ? data.billTotal : (afterMcn - feeDv);
-          netTk = (data && data.billTotal > 0) ? data.billTotal : (billReal - wht10 - vat5);
         }
+        netTk = billReal - wht10 - vat5 - tncnKd5;
       }
 
       totalGross += gross;

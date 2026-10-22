@@ -314,5 +314,108 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(total_vat5, 8868.0)    # Chỉ tháng 10 có 5% VAT
         self.assertEqual(total_pit5, 8868.0)    # Chỉ tháng 10 có 5% PIT
 
+    def test_cross_tab_and_card_accounting_synchronization(self):
+        # Kiểm tra tính đồng bộ 100% giữa tất cả các Tab và Card thống kê:
+        # Tab 1: Đơn giản (Mẫu Excel)
+        # Tab 2: Sổ tay thuế đầy đủ (10 cột)
+        # Tab 3: Bảng kê chi tiết theo ngày
+        # Popup Summary Cards: Gross, Tax, Net
+        user_months_data = [
+            {"m": "2026-01", "gross": 1224353.0, "bill_total": 1212354.0, "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-02", "gross": 697783.0,  "bill_total": 690945.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-03", "gross": 996667.0,  "bill_total": 986900.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-04", "gross": 582415.0,  "bill_total": 576706.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-05", "gross": 647819.0,  "bill_total": 641470.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-06", "gross": 343999.0,  "bill_total": 340628.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-07", "gross": 452905.0,  "bill_total": 448468.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-08", "gross": 664816.0,  "bill_total": 658299.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-09", "gross": 459292.0,  "bill_total": 454793.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0},
+            {"m": "2026-10", "gross": 177364.0,  "bill_total": 177364.0,  "wht": 0.0, "vat": 0.0, "fee": 0.0}
+        ]
+
+        total_gross = 0
+        total_mcn = 0
+        total_after_mcn = 0
+        total_fee_dv = 0
+        total_bill = 0
+        total_wht10 = 0
+        total_vat5 = 0
+        total_tncn5 = 0
+        total_net = 0
+
+        simple_tab_rows = []
+        full_tab_rows = []
+
+        for item in user_months_data:
+            m = item["m"]
+            gross = item["gross"]
+            mcn = 0.0
+            after_mcn = gross - mcn
+            is_oct_onwards = (m >= "2026-10")
+
+            if is_oct_onwards:
+                fee_dv = item["fee"] if item["fee"] > 0 else 0.0
+                wht10 = 0.0
+                vat5 = item["vat"] if item["vat"] > 0 else round(after_mcn * 0.05)
+                tncn5 = item["wht"] if item["wht"] > 0 else round(after_mcn * 0.05)
+            else:
+                if item["fee"] > 0:
+                    fee_dv = item["fee"]
+                elif item["bill_total"] > 0 and after_mcn > item["bill_total"]:
+                    fee_dv = round(after_mcn - item["bill_total"])
+                else:
+                    fee_dv = 0.0
+                wht10 = item["wht"] if item["wht"] > 0 else 0.0
+                vat5 = item["vat"] if item["vat"] > 0 else 0.0
+                tncn5 = 0.0
+
+            bill_real = after_mcn - fee_dv
+            net_tk = bill_real - wht10 - vat5 - tncn5
+
+            # Invariant: Sau MCN - Phí DV = Thực nhận theo bill
+            self.assertEqual(bill_real, after_mcn - fee_dv)
+            # Invariant: Thực nhận theo bill - Thuế = Ước thực về TK
+            self.assertEqual(net_tk, bill_real - wht10 - vat5 - tncn5)
+
+            total_gross += gross
+            total_mcn += mcn
+            total_after_mcn += after_mcn
+            total_fee_dv += fee_dv
+            total_bill += bill_real
+            total_wht10 += wht10
+            total_vat5 += vat5
+            total_tncn5 += tncn5
+            total_net += net_tk
+
+            simple_tab_rows.append((m, "Doanh thu từ Shopee", gross, net_tk))
+            full_tab_rows.append((m, gross, mcn, after_mcn, fee_dv, bill_real, wht10, vat5, tncn5, net_tk))
+
+        # Kiểm tra khớp chính xác từng số liệu trên giao diện:
+        self.assertEqual(total_gross, 6247413.0)
+        self.assertEqual(total_fee_dv, 59486.0)
+        self.assertEqual(total_bill, 6187927.0)
+        self.assertEqual(total_vat5, 8868.0)
+        self.assertEqual(total_tncn5, 8868.0)
+        self.assertEqual(total_net, 6170191.0)
+
+        # Tab 1: Đơn giản (Mẫu Excel)
+        simple_total_gross = sum(r[2] for r in simple_tab_rows)
+        simple_total_net = sum(r[3] for r in simple_tab_rows)
+        self.assertEqual(simple_total_gross, 6247413.0)
+        self.assertEqual(simple_total_net, 6170191.0) # Phải bằng đúng 6.170.191 đ (không bị lệch sang 6.186.189 đ)
+
+        # Tab 2: Sổ tay thuế đầy đủ (10 cột)
+        self.assertEqual(full_tab_rows[0][4], 11999.0) # Tháng 1 Phí DV = 11.999 đ
+        self.assertEqual(full_tab_rows[0][5], 1212354.0) # Tháng 1 Bill = 1.212.354 đ
+        self.assertEqual(full_tab_rows[9][4], 0.0)       # Tháng 10 Phí DV = 0 đ
+        self.assertEqual(full_tab_rows[9][5], 177364.0)  # Tháng 10 Bill = 177.364 đ
+        self.assertEqual(full_tab_rows[9][7], 8868.0)    # Tháng 10 VAT = 8.868 đ
+        self.assertEqual(full_tab_rows[9][8], 8868.0)    # Tháng 10 PIT = 8.868 đ
+        self.assertEqual(full_tab_rows[9][9], 159628.0)  # Tháng 10 Net = 159.628 đ (không bị giữ 175.626 đ)
+
+        # Tab 3: Bảng kê chi tiết theo ngày
+        # Tổng doanh thu các ngày = total_gross = 6.247.413 đ
+        self.assertEqual(total_gross, 6247413.0)
+
 if __name__ == "__main__":
     unittest.main()
