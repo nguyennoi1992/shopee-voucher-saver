@@ -344,74 +344,6 @@ function setAffiliateStatus(msg, type = "") {
   affiliateStatusEl.className = `status${type ? ` ${type}` : ""}`;
 }
 
-const VERIFIED_OCTOBER_PAYOUTS = [
-  {
-    payoutDisplayVersion: 0,
-    paymentPayout: {
-      accountType: 3,
-      payoutId: "17360010148261019",
-      payoutCreatedTime: "1792350007", // 19-10-2026
-      eligibleTotalAmount: "7179000000", // 71.790 đ
-      totalServiceFee: "70400000",       // 704 đ
-      vatTotalAmount: "359000000",       // 3.590 đ
-      whtTotalAmount: "359000000",       // 3.590 đ
-      totalPaymentAmount: "6390600000"   // 63.906 đ
-    }
-  },
-  {
-    payoutDisplayVersion: 0,
-    paymentPayout: {
-      accountType: 3,
-      payoutId: "17360010148261012",
-      payoutCreatedTime: "1791745206", // 12-10-2026
-      eligibleTotalAmount: "2372100000", // 23.721 đ
-      totalServiceFee: "23200000",       // 232 đ
-      vatTotalAmount: "118600000",       // 1.186 đ
-      whtTotalAmount: "118600000",       // 1.186 đ
-      totalPaymentAmount: "2111700000"   // 21.117 đ
-    }
-  },
-  {
-    payoutDisplayVersion: 0,
-    paymentPayout: {
-      accountType: 3,
-      payoutId: "17360010148261008",
-      payoutCreatedTime: "1791399640", // 08-10-2026
-      eligibleTotalAmount: "4998500000", // 49.985 đ
-      totalServiceFee: "48900000",       // 489 đ
-      vatTotalAmount: "249900000",       // 2.499 đ
-      whtTotalAmount: "249900000",       // 2.499 đ
-      totalPaymentAmount: "4449800000"   // 44.498 đ
-    }
-  },
-  {
-    payoutDisplayVersion: 0,
-    paymentPayout: {
-      accountType: 3,
-      payoutId: "17360010148261005",
-      payoutCreatedTime: "1791140407", // 05-10-2026
-      eligibleTotalAmount: "3823000000", // 38.230 đ
-      totalServiceFee: "37600000",       // 376 đ
-      vatTotalAmount: "191200000",       // 1.912 đ
-      whtTotalAmount: "191200000",       // 1.912 đ
-      totalPaymentAmount: "3403000000"   // 34.030 đ
-    }
-  },
-  {
-    payoutDisplayVersion: 0,
-    paymentPayout: {
-      accountType: 3,
-      payoutId: "17360010148261001",
-      payoutCreatedTime: "1790794806", // 01-10-2026
-      eligibleTotalAmount: "2356200000", // 23.562 đ
-      totalServiceFee: "23100000",       // 231 đ
-      vatTotalAmount: "0",               // 0 đ
-      whtTotalAmount: "0",               // 0 đ
-      totalPaymentAmount: "2333100000"   // 23.331 đ
-    }
-  }
-];
-
 async function loadAffiliateSummary() {
   const cached = await new Promise(resolve => {
     if (chrome?.storage?.local) {
@@ -435,20 +367,7 @@ async function loadAffiliateSummary() {
     }
   });
 
-  let list = Array.isArray(cached?.list) ? cached.list : [];
-  const hasOctPayouts = list.some(it => {
-    const p = it.paymentPayout || it;
-    const s = parseInt(p.payoutCreatedTime || 0, 10);
-    if (!s) return false;
-    const dt = new Date(s * 1000 + 7 * 3600000);
-    return dt.getUTCFullYear() === 2026 && dt.getUTCMonth() === 9;
-  });
-
-  if (!hasOctPayouts) {
-    list = [...VERIFIED_OCTOBER_PAYOUTS, ...list];
-  }
-  cachedAffiliateList = list;
-
+  cachedAffiliateList = Array.isArray(cached?.list) ? cached.list : [];
   if (cachedAffiliateList.length === 0) {
     setAffiliateStatus("Chưa có dữ liệu cache. Hãy bấm 'Đồng bộ dữ liệu' từ tab Affiliate hoặc mở Sổ tay thuế.");
     return;
@@ -947,9 +866,7 @@ async function fetchAffiliateLive() {
 
     const res = results?.[0]?.result;
     if (res?.payoutList && Array.isArray(res.payoutList)) {
-      const newPayouts = res.payoutList;
-      const nonPayouts = cachedAffiliateList.filter(it => !it.paymentPayout && !it.payoutId && !it.payoutCreatedTime);
-      cachedAffiliateList = [...newPayouts, ...nonPayouts];
+      cachedAffiliateList = res.payoutList;
       if (chrome?.storage?.local) {
         chrome.storage.local.set({
           [AFFILIATE_CACHE_KEY_V2]: {
@@ -959,10 +876,9 @@ async function fetchAffiliateLive() {
         });
       }
       loadAffiliateSummary();
-      setAffiliateStatus(`Đã đồng bộ ${newPayouts.length} kỳ thanh toán Payout thành công!`, "success");
+      setAffiliateStatus(`Đã đồng bộ ${cachedAffiliateList.length} kỳ thanh toán Payout thành công!`, "success");
     } else if (res?.code === 0 && Array.isArray(res.data?.list)) {
-      const existingPayouts = cachedAffiliateList.filter(it => it.paymentPayout || it.payoutId || it.payoutCreatedTime);
-      cachedAffiliateList = existingPayouts.length > 0 ? [...existingPayouts, ...res.data.list] : res.data.list;
+      cachedAffiliateList = res.data.list;
       if (chrome?.storage?.local) {
         chrome.storage.local.set({
           [AFFILIATE_CACHE_KEY_V2]: {
@@ -972,7 +888,7 @@ async function fetchAffiliateLive() {
         });
       }
       loadAffiliateSummary();
-      setAffiliateStatus(`Đã đồng bộ ${res.data.list.length} bản ghi Billing List (giữ ${existingPayouts.length} kỳ Payout).`, "success");
+      setAffiliateStatus(`Đã đồng bộ ${cachedAffiliateList.length} bản ghi Billing List thành công!`, "success");
     } else {
       setAffiliateStatus("Không tải được dữ liệu: " + (res?.msg || res?.error || "Vui lòng kiểm tra đăng nhập Shopee Affiliate."), "error");
     }

@@ -158,15 +158,11 @@
         const gqlJson = await gqlRes.json();
         const pList = gqlJson.data?.getPaymentPayoutBillingList?.payoutList;
         if (Array.isArray(pList) && pList.length > 0) {
-          chrome.storage.local.get([STORAGE_KEY], cur => {
-            const curList = cur?.[STORAGE_KEY]?.list || [];
-            const nonPayouts = curList.filter(it => !it.paymentPayout && !it.payoutId && !it.payoutCreatedTime);
-            chrome.storage.local.set({
-              [STORAGE_KEY]: {
-                updatedAt: Date.now(),
-                list: [...pList, ...nonPayouts]
-              }
-            });
+          chrome.storage.local.set({
+            [STORAGE_KEY]: {
+              updatedAt: Date.now(),
+              list: pList
+            }
           });
           return;
         }
@@ -198,15 +194,11 @@
             }
           }
           if (domItems.length > 0) {
-            chrome.storage.local.get([STORAGE_KEY], cur => {
-              const curList = cur?.[STORAGE_KEY]?.list || [];
-              const nonPayouts = curList.filter(it => !it.paymentPayout && !it.payoutId && !it.payoutCreatedTime);
-              chrome.storage.local.set({
-                [STORAGE_KEY]: {
-                  updatedAt: Date.now(),
-                  list: [...domItems, ...nonPayouts]
-                }
-              });
+            chrome.storage.local.set({
+              [STORAGE_KEY]: {
+                updatedAt: Date.now(),
+                list: domItems
+              }
             });
             return;
           }
@@ -221,15 +213,11 @@
       const res = await fetch(url);
       const json = await res.json();
       if (json.code === 0 && Array.isArray(json.data?.list)) {
-        chrome.storage.local.get([STORAGE_KEY], cur => {
-          const curList = cur?.[STORAGE_KEY]?.list || [];
-          const existingPayouts = curList.filter(it => it.paymentPayout || it.payoutId || it.payoutCreatedTime);
-          chrome.storage.local.set({
-            [STORAGE_KEY]: {
-              updatedAt: Date.now(),
-              list: existingPayouts.length > 0 ? [...existingPayouts, ...json.data.list] : json.data.list
-            }
-          });
+        chrome.storage.local.set({
+          [STORAGE_KEY]: {
+            updatedAt: Date.now(),
+            list: json.data.list
+          }
         });
       }
     } catch (_) {

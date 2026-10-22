@@ -70,74 +70,6 @@
     });
   });
 
-  const VERIFIED_OCTOBER_PAYOUTS = [
-    {
-      payoutDisplayVersion: 0,
-      paymentPayout: {
-        accountType: 3,
-        payoutId: "17360010148261019",
-        payoutCreatedTime: "1792350007", // 19-10-2026
-        eligibleTotalAmount: "7179000000", // 71.790 đ
-        totalServiceFee: "70400000",       // 704 đ
-        vatTotalAmount: "359000000",       // 3.590 đ
-        whtTotalAmount: "359000000",       // 3.590 đ
-        totalPaymentAmount: "6390600000"   // 63.906 đ
-      }
-    },
-    {
-      payoutDisplayVersion: 0,
-      paymentPayout: {
-        accountType: 3,
-        payoutId: "17360010148261012",
-        payoutCreatedTime: "1791745206", // 12-10-2026
-        eligibleTotalAmount: "2372100000", // 23.721 đ
-        totalServiceFee: "23200000",       // 232 đ
-        vatTotalAmount: "118600000",       // 1.186 đ
-        whtTotalAmount: "118600000",       // 1.186 đ
-        totalPaymentAmount: "2111700000"   // 21.117 đ
-      }
-    },
-    {
-      payoutDisplayVersion: 0,
-      paymentPayout: {
-        accountType: 3,
-        payoutId: "17360010148261008",
-        payoutCreatedTime: "1791399640", // 08-10-2026
-        eligibleTotalAmount: "4998500000", // 49.985 đ
-        totalServiceFee: "48900000",       // 489 đ
-        vatTotalAmount: "249900000",       // 2.499 đ
-        whtTotalAmount: "249900000",       // 2.499 đ
-        totalPaymentAmount: "4449800000"   // 44.498 đ
-      }
-    },
-    {
-      payoutDisplayVersion: 0,
-      paymentPayout: {
-        accountType: 3,
-        payoutId: "17360010148261005",
-        payoutCreatedTime: "1791140407", // 05-10-2026
-        eligibleTotalAmount: "3823000000", // 38.230 đ
-        totalServiceFee: "37600000",       // 376 đ
-        vatTotalAmount: "191200000",       // 1.912 đ
-        whtTotalAmount: "191200000",       // 1.912 đ
-        totalPaymentAmount: "3403000000"   // 34.030 đ
-      }
-    },
-    {
-      payoutDisplayVersion: 0,
-      paymentPayout: {
-        accountType: 3,
-        payoutId: "17360010148261001",
-        payoutCreatedTime: "1790794806", // 01-10-2026
-        eligibleTotalAmount: "2356200000", // 23.562 đ
-        totalServiceFee: "23100000",       // 231 đ
-        vatTotalAmount: "0",               // 0 đ
-        whtTotalAmount: "0",               // 0 đ
-        totalPaymentAmount: "2333100000"   // 23.331 đ
-      }
-    }
-  ];
-
   function parsePastedTextOrJson(text) {
     const trimmed = text.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -230,15 +162,7 @@
     if (!text) return;
     try {
       const parsedItems = parsePastedTextOrJson(text);
-      // Smart merge: replace existing payouts or merge with non-payouts
-      const isNewPayout = parsedItems.some(it => it.paymentPayout || it.payoutId || it.payoutCreatedTime);
-      if (isNewPayout) {
-        const nonPayouts = rawBillingList.filter(it => !it.paymentPayout && !it.payoutId && !it.payoutCreatedTime);
-        rawBillingList = [...parsedItems, ...nonPayouts];
-      } else {
-        const existingPayouts = rawBillingList.filter(it => it.paymentPayout || it.payoutId || it.payoutCreatedTime);
-        rawBillingList = [...existingPayouts, ...parsedItems];
-      }
+      rawBillingList = parsedItems;
       saveCache(rawBillingList);
       pasteModal.classList.remove("open");
       pasteTextarea.value = "";
@@ -316,22 +240,11 @@
   async function fetchLiveFromTab(force = true) {
     if (!force) {
       const cached = await loadCache();
-      let list = Array.isArray(cached?.list) ? cached.list : [];
-      const hasOctPayouts = list.some(it => {
-        const p = it.paymentPayout || it;
-        const s = parseInt(p.payoutCreatedTime || 0, 10);
-        if (!s) return false;
-        const dt = parseEpochToGmt7(s);
-        return dt.getFullYear() === 2026 && dt.getMonth() === 9; // Tháng 10
-      });
-      if (!hasOctPayouts && list.length === 0) {
-        list = [...VERIFIED_OCTOBER_PAYOUTS];
-      }
-      if (list.length > 0) {
-        rawBillingList = list;
+      if (cached && cached.updatedAt && (Date.now() - cached.updatedAt < CACHE_TTL_MS) && Array.isArray(cached.list) && cached.list.length > 0) {
+        rawBillingList = cached.list;
         initDataAndRender();
-        const updatedDate = new Date(cached?.updatedAt || Date.now());
-        const remainingHours = Math.max(0, Math.round((CACHE_TTL_MS - (Date.now() - (cached?.updatedAt || Date.now()))) / 3600000));
+        const updatedDate = new Date(cached.updatedAt);
+        const remainingHours = Math.max(0, Math.round((CACHE_TTL_MS - (Date.now() - cached.updatedAt)) / 3600000));
         showStatus(`Dữ liệu nạp từ Cache (${rawBillingList.length} bản ghi). Lưu lúc ${updatedDate.toLocaleTimeString("vi-VN")} - Hết hạn sau ~${remainingHours}h.`, "success");
         return;
       }
@@ -505,21 +418,17 @@
       }
 
       if (response.payoutList && Array.isArray(response.payoutList)) {
-        const newPayouts = response.payoutList;
-        const nonPayouts = rawBillingList.filter(it => !it.paymentPayout && !it.payoutId && !it.payoutCreatedTime);
-        rawBillingList = [...newPayouts, ...nonPayouts];
+        rawBillingList = response.payoutList;
         await saveCache(rawBillingList);
         initDataAndRender();
         const now = new Date();
-        showStatus(`Đã làm mới thành công ${newPayouts.length} kỳ thanh toán từ Payout Record và lưu Cache (24h).`, "success", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN")}`);
+        showStatus(`Đã làm mới thành công ${rawBillingList.length} kỳ thanh toán từ Payout Record và lưu Cache (24h).`, "success", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN")}`);
       } else if (response.code === 0 && Array.isArray(response.data?.list)) {
-        // Giữ lại các kỳ Payout Record đã có, không để billing_list ghi đè mất Payout
-        const existingPayouts = rawBillingList.filter(it => it.paymentPayout || it.payoutId || it.payoutCreatedTime);
-        rawBillingList = existingPayouts.length > 0 ? [...existingPayouts, ...response.data.list] : response.data.list;
+        rawBillingList = response.data.list;
         await saveCache(rawBillingList);
         initDataAndRender();
         const now = new Date();
-        showStatus(`Đã đồng bộ ${response.data.list.length} bản ghi Billing List (${existingPayouts.length} kỳ Payout Record được giữ nguyên).`, "success", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN")}`);
+        showStatus(`Đã làm mới thành công ${rawBillingList.length} bản ghi Billing List và lưu Cache (24h).`, "success", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN")}`);
       } else {
         showStatus("Shopee trả về lỗi hoặc chưa đăng nhập: " + (response.msg || JSON.stringify(response)), "error");
       }
@@ -1148,28 +1057,11 @@
   // Load from cache or trigger live check
   (async function main() {
     const cached = await loadCache();
-    let list = Array.isArray(cached?.list) ? cached.list : [];
+    const isFresh = cached && cached.updatedAt && (Date.now() - cached.updatedAt < CACHE_TTL_MS) && Array.isArray(cached.list) && cached.list.length > 0;
 
-    // Kiểm tra xem đã có các kỳ Payout Record của tháng 10/2026 chưa
-    const hasOctPayouts = list.some(it => {
-      const p = it.paymentPayout || it;
-      const s = parseInt(p.payoutCreatedTime || 0, 10);
-      if (!s) return false;
-      const dt = parseEpochToGmt7(s);
-      return dt.getFullYear() === 2026 && dt.getMonth() === 9; // Tháng 10
-    });
-
-    if (!hasOctPayouts) {
-      // Bổ sung ngay các kỳ Payout thực tế tháng 10/2026 theo bảng đối soát chuẩn
-      list = [...VERIFIED_OCTOBER_PAYOUTS, ...list];
-      saveCache(list);
-    }
-
-    rawBillingList = list;
-    initDataAndRender();
-
-    const isFresh = cached && cached.updatedAt && (Date.now() - cached.updatedAt < CACHE_TTL_MS);
-    if (isFresh && cached.list?.length > 0) {
+    if (isFresh) {
+      rawBillingList = cached.list;
+      initDataAndRender();
       const updatedDate = new Date(cached.updatedAt);
       const remainingHours = Math.max(0, Math.round((CACHE_TTL_MS - (Date.now() - cached.updatedAt)) / 3600000));
       showStatus(
@@ -1177,8 +1069,15 @@
         "success",
         "Đã dùng cache (không gọi API). Bấm 'Làm mới từ Shopee' nếu cần tải mới."
       );
+    } else if (cached?.list && Array.isArray(cached.list) && cached.list.length > 0) {
+      rawBillingList = cached.list;
+      initDataAndRender();
+      showStatus("Dữ liệu cache đã hết hạn (>24h). Đang kết nối tới Shopee Affiliate để cập nhật...", "normal");
+      fetchLiveFromTab(false);
     } else {
-      showStatus("Đã tải dữ liệu đối soát chuẩn Shopee Affiliate. Bấm 'Làm mới từ Shopee' nếu cần cập nhật trực tiếp.", "success");
+      initDataAndRender();
+      showStatus("Chưa có dữ liệu trong cache. Đang tìm tab Shopee Affiliate để tải...");
+      fetchLiveFromTab(false);
     }
   })();
 })();
