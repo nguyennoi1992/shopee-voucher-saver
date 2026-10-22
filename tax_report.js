@@ -165,21 +165,22 @@
       if (!l || l.startsWith("Ngày") || l.startsWith("TỔNG") || l.startsWith("Tháng")) continue;
       const dateMatch = l.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
       if (!dateMatch) continue;
-      const [_, d, m, y] = dateMatch;
+      const [dateStr, d, m, y] = dateMatch;
       const epoch = Math.floor(new Date(`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}T12:00:00+07:00`).getTime() / 1000);
 
-      const idMatch = l.match(/(?:\.\.\.|SPV-PO-|SPV-PJ-|\b)(\d{4,18})\b/);
+      // Bóc tách dateStr trước để tránh năm 4 chữ số (vd: 2026) bị khớp nhầm thành payoutId hoặc số tiền
+      let rem = l.replace(dateStr, "");
+      const idMatch = rem.match(/(?:\.\.\.|SPV-PO-|SPV-PJ-|\b)(\d{4,18})\b/);
       const pid = idMatch ? idMatch[1] : `payout_${d}_${m}_${y}`;
+      if (idMatch) rem = rem.replace(idMatch[0], "");
 
       const nums = [];
       const numRegex = /([\d.,]+)\s*đ?/g;
       let mNum;
-      while ((mNum = numRegex.exec(l)) !== null) {
+      while ((mNum = numRegex.exec(rem)) !== null) {
         const raw = mNum[1].replace(/\./g, "").replace(/,/g, ".");
         const val = parseFloat(raw);
-        if (!isNaN(val) && !mNum[1].includes("-") && !mNum[1].includes("/")) {
-          nums.push(val);
-        }
+        if (!isNaN(val)) nums.push(val);
       }
 
       if (nums.length >= 3) {
@@ -187,17 +188,23 @@
         if (nums.length >= 6) {
           gross = nums[0];
           fee = nums[1];
+          // nums[2] là Doanh thu hợp lệ (valid = gross - fee)
           vat = nums[3];
           pit = nums[4];
           net = nums[5];
         } else if (nums.length === 3) {
           gross = nums[0];
-          fee = nums[1];
           net = nums[2];
+          // Nếu số thứ 2 nhỏ (<10% gross) thì là fee; nếu lớn (>50% gross) thì là doanh thu hợp lệ
+          if (nums[1] < gross * 0.1) {
+            fee = nums[1];
+          } else {
+            fee = Math.max(0, Math.round(gross - nums[1]));
+          }
         } else {
           gross = nums[0];
           net = nums[nums.length - 1];
-          fee = nums[1] || 0;
+          fee = nums[1] < gross * 0.1 ? nums[1] : Math.max(0, Math.round(gross - nums[1]));
         }
         items.push({
           payoutDisplayVersion: 0,
@@ -425,58 +432,17 @@
                     cancelType
                     closeReason
                   }
-                  payoutInvoice
+                  payoutInvoice {
+                    invoiceType
+                    invoiceStatus
+                    dismissReason
+                  }
                   payoutExternalInfo {
                     mergeInvoiceStatus
                     serviceFeeInvoiceStatus
                   }
                 }
                 payoutTotalAmount
-                payoutBreakdown {
-                  totalPaymentAmount
-                  totalPaymentAmountDis
-                  socialMediasCommission
-                  socialMediasCommissionDis
-                  socialMedias {
-                    bonusCommission {
-                      bonusComm
-                      bonusCommDis
-                      bonusType {
-                        content
-                        contentDis
-                        eventCampaignId
-                        header
-                      }
-                    }
-                    mcnManagementFee {
-                      mcnManagementFee
-                      mcnManagementFeeDis
-                    }
-                    pppCommission {
-                      pppComm
-                      pppCommDis
-                    }
-                    sellerCommission {
-                      sellerComm
-                      sellerCommConversion
-                      sellerCommDis
-                      sellerCommDiscovery
-                      sellerCommNormal
-                    }
-                    serviceFee {
-                      serviceFee
-                      serviceFeeDis
-                    }
-                    shopeeCommission {
-                      orderedInDifferentShop
-                      orderedInDifferentShopDis
-                      orderedInSameShop
-                      orderedInSameShopDis
-                      shopeeComm
-                      shopeeCommType
-                    }
-                  }
-                }
                 pagination {
                   pageNum
                   pageSize
@@ -485,17 +451,27 @@
               }
             }`;
 
+          // Anti-bot pacing (theo SHOPEE_ANTIBOT_CRITERIA): nghỉ ngẫu nhiên 0.4-1.2s
+          // giữa các trang GraphQL - không request burst, giữ nhịp gần hành vi portal thật.
+          const sleepJitter = (minMs, maxMs) =>
+            new Promise((resolve) => setTimeout(resolve, minMs + Math.floor(Math.random() * (maxMs - minMs + 1))));
+
           // 1. GraphQL getPaymentPayoutBillingList - lặp đủ trang theo totalCount (portal chia 10 kỳ/trang)
           // Chiến lược: POST không CSRF trước (chuẩn portal), chỉ thêm CSRF-token khi 403/401.
+          // Ngưỡng §6b (SHOPEE_ANTIBOT_CRITERIA): HTTP 403 >=2 trong run -> dừng endpoint đó,
+          // không retry-spam, chuyển sang dữ liệu Billing List và chờ ít nhất 1 giờ.
           const payouts = [];
           const seenPayoutIds = new Set();
           const gqlIssues = [];
           let csrfToken = null;
           let tokenLookupDone = false;
+          let gql403Count = 0;
           try {
-            const PAGE_LIMIT = 20; // 20 trang x 100 kỳ là dư cho 1 năm đối soát
+            const PAGE_LIMIT = 20; // 20 trang x 50 kỳ là dư cho toàn bộ đối soát
             let totalCount = 0;
             for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
+              if (gql403Count >= 2) break; // circuit breaker anti-bot
+              if (pageNum > 1) await sleepJitter(400, 1200);
               const callGql = async (withCsrf) => {
                 const headers = Object.assign({}, baseHeaders);
                 if (withCsrf && csrfToken) headers["CSRF-token"] = csrfToken;
@@ -505,7 +481,7 @@
                   body: JSON.stringify({
                     operationName: "getPaymentPayoutBillingList",
                     query: PAYOUT_QUERY,
-                    variables: { pageSize: 100, pageNum: pageNum }
+                    variables: { pageSize: 50, pageNum: pageNum }
                   })
                 });
                 const fresh = res.headers && res.headers.get ? res.headers.get("csrf-token") : null;
@@ -520,6 +496,7 @@
               let r = await callGql(false);
               let node = r.json?.data?.getPaymentPayoutBillingList;
               if (!node && (r.status === 403 || r.status === 401)) {
+                gql403Count++;
                 // CSRF-token cookie sai/đổi => tìm token chuẩn rồi thử lại với header
                 if (!tokenLookupDone) {
                   tokenLookupDone = true;
@@ -528,6 +505,7 @@
                 if (csrfToken) {
                   r = await callGql(true);
                   node = r.json?.data?.getPaymentPayoutBillingList;
+                  if (!node && (r.status === 403 || r.status === 401)) gql403Count++;
                 }
               }
               if (!node) {
@@ -535,6 +513,9 @@
                   ? r.json.errors.map(e => e.message).join("; ")
                   : (r.json?.msg || r.json?.error_message || `HTTP ${r.status}`);
                 gqlIssues.push(String(errs));
+                if (gql403Count >= 2) {
+                  gqlIssues.push("Dừng GraphQL sau 2 lỗi 403/401 (chống anti-bot) - chỉ dùng Billing List, thử lại sau ít nhất 1 giờ.");
+                }
                 break;
               }
               const pList = Array.isArray(node.payoutList) ? node.payoutList : [];

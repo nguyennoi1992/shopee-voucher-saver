@@ -567,7 +567,12 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertNotIn('"taxTotalAmount"', js)
         self.assertIn('"/api/v3/gql?q=getPayoutList"', js)
         self.assertIn('"Affiliate-Program-Type"', js)
-        # Phân trang theo totalCount (portal chỉ trả ~10 kỳ/trang)
+        # payoutInvoice là Object/List phải có subfield selection hợp lệ trong GraphQL
+        self.assertIn("payoutInvoice {", js)
+        self.assertIn("invoiceType", js)
+        self.assertIn("invoiceStatus", js)
+        self.assertIn("dismissReason", js)
+        # Phân trang theo totalCount
         self.assertIn("pageNum: pageNum", js)
         self.assertIn("totalCount", js)
         # Fix HTTP 403: chạy trong world MAIN (fetch của portal tự đủ header),
@@ -581,6 +586,7 @@ class TestTaxCalculator(unittest.TestCase):
             js0 = f.read()
         self.assertIn('world: "MAIN"', js0)
         self.assertIn("/api/v3/config/website", js0)
+        self.assertIn("payoutInvoice {", js0)
 
         with open("affiliate_content.js", encoding="utf-8") as f:
             js2 = f.read()
@@ -588,6 +594,49 @@ class TestTaxCalculator(unittest.TestCase):
         # Đã bỏ cào DOM (el eligible = net gán sai nghĩa => sai phân rã)
         self.assertNotIn("querySelectorAll", js2)
         self.assertIn("/api/v3/config/website", js2)
+        self.assertIn("payoutInvoice {", js2)
+
+    def test_parse_pasted_table_matches_user_oracle(self):
+        import subprocess, json
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf8');
+        const parseMatch = code.match(/function parsePastedTextOrJson\\([\\s\\S]*?^  \\}/m);
+        eval(parseMatch[0]);
+
+        const sampleTable = `
+Ngày tạo bill	Mã thanh toán	Tiền sàn trả (Gross)	Phí DV 0,98%	Doanh thu hợp lệ	5% VAT	5% PIT (TNCN)	Thực nhận sau thuế
+01-10-2026	...1001	23.562 đ	231 đ	23.331 đ	0 đ	0 đ	23.331 đ
+05-10-2026	...1005	38.230 đ	376 đ	37.854 đ	1.912 đ	1.912 đ	34.030 đ
+08-10-2026	...1008	49.985 đ	489 đ	49.496 đ	2.499 đ	2.499 đ	44.498 đ
+12-10-2026	...1012	23.721 đ	232 đ	23.489 đ	1.186 đ	1.186 đ	21.117 đ
+19-10-2026	...1019	71.790 đ	704 đ	71.086 đ	3.590 đ	3.590 đ	63.906 đ
+TỔNG CỘNG	5 kỳ	207.288 đ	2.032 đ	205.256 đ	9.187 đ	9.187 đ	186.882 đ
+        `;
+
+        const items = parsePastedTextOrJson(sampleTable);
+        console.log(JSON.stringify(items));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        items = json.loads(res.stdout)
+        self.assertEqual(len(items), 5)
+        # Kỳ 1: 01-10-2026
+        p0 = items[0]["paymentPayout"]
+        self.assertEqual(p0["payoutId"], "1001")
+        self.assertEqual(p0["eligibleTotalAmount"], "2356200000")
+        self.assertEqual(p0["totalPaymentAmount"], "2333100000")
+        self.assertEqual(p0["totalServiceFee"], "23100000")
+        self.assertEqual(p0["vatTotalAmount"], "0")
+        self.assertEqual(p0["whtTotalAmount"], "0")
+
+        # Kỳ 5: 19-10-2026
+        p4 = items[4]["paymentPayout"]
+        self.assertEqual(p4["payoutId"], "1019")
+        self.assertEqual(p4["eligibleTotalAmount"], "7179000000")
+        self.assertEqual(p4["totalPaymentAmount"], "6390600000")
+        self.assertEqual(p4["totalServiceFee"], "70400000")
+        self.assertEqual(p4["vatTotalAmount"], "359000000")
+        self.assertEqual(p4["whtTotalAmount"], "359000000")
 
     def test_october_2026_user_validation_oracle(self):
         # Bảng chân lý đối soát chính xác theo yêu cầu người dùng (Từng dòng và Tổng cộng):

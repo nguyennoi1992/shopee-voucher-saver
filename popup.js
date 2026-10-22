@@ -864,7 +864,11 @@ async function fetchAffiliateLive() {
                   cancelType
                   closeReason
                 }
-                payoutInvoice
+                payoutInvoice {
+                  invoiceType
+                  invoiceStatus
+                  dismissReason
+                }
                 payoutExternalInfo {
                   mergeInvoiceStatus
                   serviceFeeInvoiceStatus
@@ -879,17 +883,27 @@ async function fetchAffiliateLive() {
             }
           }`;
 
+        // Anti-bot pacing (theo SHOPEE_ANTIBOT_CRITERIA): nghỉ ngẫu nhiên 0.4-1.2s
+        // giữa các trang GraphQL - không request burst, giữ nhịp gần hành vi portal thật.
+        const sleepJitter = (minMs, maxMs) =>
+          new Promise((resolve) => setTimeout(resolve, minMs + Math.floor(Math.random() * (maxMs - minMs + 1))));
+
         // 1. GraphQL getPaymentPayoutBillingList - lặp đủ trang theo totalCount.
         // Chiến lược: POST không CSRF trước (chuẩn portal), chỉ thêm CSRF-token khi 403/401.
+        // Ngưỡng §6b (SHOPEE_ANTIBOT_CRITERIA): HTTP 403 >=2 trong run -> dừng endpoint đó,
+        // không retry-spam, chuyển sang dữ liệu Billing List và chờ ít nhất 1 giờ.
         const payouts = [];
         const seenPayoutIds = new Set();
         const gqlIssues = [];
         let csrfToken = null;
         let tokenLookupDone = false;
+        let gql403Count = 0;
         try {
           const PAGE_LIMIT = 20;
           let totalCount = 0;
           for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
+            if (gql403Count >= 2) break; // circuit breaker anti-bot
+            if (pageNum > 1) await sleepJitter(400, 1200);
             const callGql = async (withCsrf) => {
               const headers = Object.assign({}, baseHeaders);
               if (withCsrf && csrfToken) headers["CSRF-token"] = csrfToken;
@@ -899,7 +913,7 @@ async function fetchAffiliateLive() {
                 body: JSON.stringify({
                   operationName: "getPaymentPayoutBillingList",
                   query: PAYOUT_QUERY,
-                  variables: { pageSize: 100, pageNum: pageNum }
+                  variables: { pageSize: 50, pageNum: pageNum }
                 })
               });
               const fresh = res.headers && res.headers.get ? res.headers.get("csrf-token") : null;
@@ -914,6 +928,7 @@ async function fetchAffiliateLive() {
             let r = await callGql(false);
             let node = r.json?.data?.getPaymentPayoutBillingList;
             if (!node && (r.status === 403 || r.status === 401)) {
+              gql403Count++;
               // CSRF-token cookie sai/đổi => tìm token chuẩn rồi thử lại với header
               if (!tokenLookupDone) {
                 tokenLookupDone = true;
@@ -922,6 +937,7 @@ async function fetchAffiliateLive() {
               if (csrfToken) {
                 r = await callGql(true);
                 node = r.json?.data?.getPaymentPayoutBillingList;
+                if (!node && (r.status === 403 || r.status === 401)) gql403Count++;
               }
             }
             if (!node) {
@@ -929,6 +945,9 @@ async function fetchAffiliateLive() {
                 ? r.json.errors.map(e => e.message).join("; ")
                 : (r.json?.msg || r.json?.error_message || `HTTP ${r.status}`);
               gqlIssues.push(String(errs));
+              if (gql403Count >= 2) {
+                gqlIssues.push("Dừng GraphQL sau 2 lỗi 403/401 (chống anti-bot) - chỉ dùng Billing List, thử lại sau ít nhất 1 giờ.");
+              }
               break;
             }
             const pList = Array.isArray(node.payoutList) ? node.payoutList : [];

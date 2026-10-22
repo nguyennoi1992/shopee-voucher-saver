@@ -154,7 +154,11 @@
                 cancelType
                 closeReason
               }
-              payoutInvoice
+              payoutInvoice {
+                invoiceType
+                invoiceStatus
+                dismissReason
+              }
               payoutExternalInfo {
                 mergeInvoiceStatus
                 serviceFeeInvoiceStatus
@@ -173,12 +177,19 @@
       const seenPayoutIds = new Set();
       let csrfToken = null;
       let tokenLookupDone = false;
+      let gql403Count = 0;
+      // Anti-bot pacing (theo SHOPEE_ANTIBOT_CRITERIA): nghỉ ngẫu nhiên 0.4-1.2s
+      // giữa các trang GraphQL; HTTP 403 >=2 trong run -> dừng endpoint (§6b).
+      const sleepJitter = (minMs, maxMs) =>
+        new Promise((resolve) => setTimeout(resolve, minMs + Math.floor(Math.random() * (maxMs - minMs + 1))));
       // 1. GraphQL getPaymentPayoutBillingList - lặp đủ trang theo totalCount.
       // Chiến lược: POST không CSRF trước (chuẩn portal), chỉ thêm CSRF-token khi 403/401.
       try {
         const PAGE_LIMIT = 20;
         let totalCount = 0;
         for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
+          if (gql403Count >= 2) break; // circuit breaker anti-bot
+          if (pageNum > 1) await sleepJitter(400, 1200);
           const callGql = async (withCsrf) => {
             const hdrs = Object.assign({}, headers);
             if (withCsrf && csrfToken) hdrs["CSRF-token"] = csrfToken;
@@ -188,7 +199,7 @@
               body: JSON.stringify({
                 operationName: "getPaymentPayoutBillingList",
                 query: PAYOUT_QUERY,
-                variables: { pageSize: 100, pageNum: pageNum }
+                variables: { pageSize: 50, pageNum: pageNum }
               })
             });
             const fresh = res.headers && res.headers.get ? res.headers.get("csrf-token") : null;
@@ -203,6 +214,7 @@
           let r = await callGql(false);
           let node = r.json?.data?.getPaymentPayoutBillingList;
           if (!node && (r.status === 403 || r.status === 401)) {
+            gql403Count++;
             // CSRF-token cookie sai/đổi => tìm token chuẩn rồi thử lại với header
             if (!tokenLookupDone) {
               tokenLookupDone = true;
@@ -211,6 +223,7 @@
             if (csrfToken) {
               r = await callGql(true);
               node = r.json?.data?.getPaymentPayoutBillingList;
+              if (!node && (r.status === 403 || r.status === 401)) gql403Count++;
             }
           }
           if (!node) break;
