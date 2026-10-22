@@ -104,6 +104,20 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
 | **5% TNCN (KD/PIT)** | 0 đ (hoặc 5% nếu HKD) | **5%** (hoặc theo bill PIT) | Thuế TNCN khấu trừ tại nguồn. |
 | **Ước thực về TK** | Bằng `total_payment_amount_dis` thực tế từ API | `Sau MCN` × 90% | Khớp chính xác 100% "Tổng thanh toán sau thuế". |
 
+### 3.3. Cơ chế Hóa đơn phí dịch vụ (service_fee_invoice) & Đối soát thanh toán
+
+Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee lưu trữ các **Hóa đơn điện tử GTGT (e-Invoice)** phát hành cho Publisher. Người dùng thường không thấy khoản phí này bị trừ trong `payment/billing` hay `payment/payout_record` do các nguyên nhân sau:
+
+1. **Bản chất của Hóa đơn phí dịch vụ**:
+   * Khi bạn tham gia Shopee Affiliate, Shopee (Công ty TNHH Shopee) đóng vai trò là đơn vị cung cấp hạ tầng công nghệ và hệ thống tiếp thị. Đổi lại, Shopee thu một khoản phí dịch vụ nền tảng.
+   * Theo quy định của Luật Quản lý Thuế và Nghị định 123/2020/NĐ-CP, khi Shopee thu khoản phí này, Shopee **bắt buộc phải xuất hóa đơn GTGT hợp pháp** cho Publisher.
+2. **Tại sao không thấy khoản trừ này trong `billing` và `payout_record`?**:
+   * **Cấn trừ trước khi kết xuất số liệu (Gross vs Net)**: Khoản phí dịch vụ này thực chất đã được Shopee cấn trừ ngay tại tầng xử lý giao dịch hoa hồng đơn hàng trước khi chốt danh sách. Số tiền *"Tổng doanh thu hợp lệ"* (`eligible_total_amount_dis`) bạn nhìn thấy trên `billing` và `payout_record` chính là số tiền đã trừ phí nền tảng này.
+   * **Tách biệt dòng tiền và chứng từ thuế**:
+     * `payout_record`: Là **sổ luân chuyển tiền mặt** (Cash Payout), ghi nhận số tiền chuyển khoản về tài khoản ngân hàng và nghĩa vụ thuế Shopee nộp thay (PIT/VAT).
+     * `service_fee_invoice`: Là **kho chứng từ thuế** (Tax Accounting), phục vụ cho Publisher làm Hộ kinh doanh hoặc Doanh nghiệp lấy hóa đơn đầu vào để hạch toán chi phí hợp lý khi quyết toán thuế.
+   * Do đó, hệ thống không trừ thêm một lần nữa trên `payout_record` để tránh trừ trùng hai lần tiền phí.
+
 ---
 
 ## 4. Cấu trúc file xuất (Excel & CSV)
