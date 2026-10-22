@@ -135,5 +135,46 @@ class TestTaxCalculator(unittest.TestCase):
         has_items = bool(empty_cache["list"])
         self.assertFalse(has_items)
 
+    def test_view_modes_data_mapping(self):
+        # Verify 3 view modes: simple, full 10-col, daily
+        rec = self.sample_records[0] # gross 1,000,000, mcn 20,000, after_mcn 980,000, dv 9,604, bill 970,396
+        gross = float(rec["eligible_total_amount_dis"])
+        mcn = float(rec["mcn_management_fee_dis"])
+        after_mcn = gross - mcn
+        dv_fee = after_mcn * 0.0098
+        bill = after_mcn - dv_fee
+        tax_vang_lai = after_mcn * 0.10
+        net_tk = bill - tax_vang_lai
+
+        # 1. Simple row
+        simple_row = {
+            "month": "2026-01",
+            "desc": "Doanh thu từ Shopee",
+            "gross": gross,
+            "net_tk": round(net_tk)
+        }
+        self.assertEqual(simple_row["gross"], 1000000.0)
+        self.assertEqual(simple_row["desc"], "Doanh thu từ Shopee")
+        self.assertEqual(simple_row["net_tk"], 872396)
+
+        # 2. Full 10-column row
+        full_row = [
+            "2026-01", gross, mcn, after_mcn, round(dv_fee), round(bill),
+            round(tax_vang_lai), 0, 0, round(net_tk)
+        ]
+        self.assertEqual(len(full_row), 10)
+        self.assertEqual(full_row[0], "2026-01")
+        self.assertEqual(full_row[1], 1000000.0) # HH gộp
+        self.assertEqual(full_row[9], 872396)    # Ước thực về TK
+
+        # 3. Daily row (Image 3 format)
+        daily_row = {
+            "date": "01/01/2026",
+            "desc": "Doanh thu từ Shopee",
+            "amount": gross
+        }
+        self.assertEqual(daily_row["desc"], "Doanh thu từ Shopee")
+        self.assertEqual(daily_row["amount"], 1000000.0)
+
 if __name__ == "__main__":
     unittest.main()

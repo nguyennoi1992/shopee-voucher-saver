@@ -19,6 +19,19 @@ const affiliateTotalGross = document.getElementById("affiliate-total-gross");
 const affiliateNetTk = document.getElementById("affiliate-net-tk");
 const affiliateTaxTotal = document.getElementById("affiliate-tax-total");
 
+const btnAffSimple = document.getElementById("btn-aff-simple");
+const btnAffFull = document.getElementById("btn-aff-full");
+const btnAffDaily = document.getElementById("btn-aff-daily");
+const affModeSimple = document.getElementById("aff-mode-simple");
+const affModeFull = document.getElementById("aff-mode-full");
+const affModeDaily = document.getElementById("aff-mode-daily");
+const affSimpleTbody = document.getElementById("aff-simple-tbody");
+const affSimpleTfoot = document.getElementById("aff-simple-tfoot");
+const affFullTbody = document.getElementById("aff-full-tbody");
+const affFullTfoot = document.getElementById("aff-full-tfoot");
+const affDailyTbody = document.getElementById("aff-daily-tbody");
+const affDailyTfoot = document.getElementById("aff-daily-tfoot");
+
 const saveButton = document.getElementById("save-vouchers");
 const voucherStatusEl = document.getElementById("voucher-status");
 
@@ -405,6 +418,16 @@ function updateAffiliateSummaryMetrics() {
   let totalGross = 0;
   let totalNet = 0;
   let totalTax = 0;
+  let totalMcn = 0;
+  let totalAfterMcn = 0;
+  let totalFeeDv = 0;
+  let totalBill = 0;
+  let totalTaxVangLai = 0;
+  let totalTaxVat = 0;
+  let totalTaxPitKd = 0;
+
+  const monthlyMap = {};
+  const dailyList = [];
 
   for (const it of cachedAffiliateList) {
     const s = it.order_completed_period_start_time;
@@ -421,20 +444,155 @@ function updateAffiliateSummaryMetrics() {
     const bill = afterMcn - feeDv;
 
     let tax = 0;
+    let taxVangLai = 0;
+    let taxVat = 0;
+    let taxPitKd = 0;
+
     if (it.with_vat) {
-      tax = afterMcn * 0.10; // 5% GTGT + 5% TNCN
+      taxVat = afterMcn * 0.05;
+      taxPitKd = afterMcn * 0.05;
+      tax = taxVat + taxPitKd;
     } else {
-      tax = afterMcn * 0.10; // 10% TNCN vãng lai
+      taxVangLai = afterMcn * 0.10;
+      tax = taxVangLai;
     }
 
+    const netTk = bill - tax;
+
+    if (!monthlyMap[m]) {
+      monthlyMap[m] = {
+        month: m,
+        gross: 0,
+        mcn: 0,
+        afterMcn: 0,
+        feeDv: 0,
+        bill: 0,
+        taxVangLai: 0,
+        taxVat: 0,
+        taxPitKd: 0,
+        netTk: 0
+      };
+    }
+
+    monthlyMap[m].gross += gross;
+    monthlyMap[m].mcn += mcn;
+    monthlyMap[m].afterMcn += afterMcn;
+    monthlyMap[m].feeDv += feeDv;
+    monthlyMap[m].bill += bill;
+    monthlyMap[m].taxVangLai += taxVangLai;
+    monthlyMap[m].taxVat += taxVat;
+    monthlyMap[m].taxPitKd += taxPitKd;
+    monthlyMap[m].netTk += netTk;
+
     totalGross += gross;
-    totalNet += (bill - tax);
+    totalNet += netTk;
     totalTax += tax;
+    totalMcn += mcn;
+    totalAfterMcn += afterMcn;
+    totalFeeDv += feeDv;
+    totalBill += bill;
+    totalTaxVangLai += taxVangLai;
+    totalTaxVat += taxVat;
+    totalTaxPitKd += taxPitKd;
+
+    const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
+    dailyList.push({
+      dateStr: dayStr,
+      timestamp: s,
+      amount: gross
+    });
   }
 
+  // Update summary cards
   affiliateTotalGross.textContent = formatCurrency(totalGross);
   affiliateNetTk.textContent = formatCurrency(totalNet);
   affiliateTaxTotal.textContent = formatCurrency(totalTax);
+
+  // Render Simple Table & Full Table
+  const sortedMonths = Object.keys(monthlyMap).sort();
+  if (sortedMonths.length === 0) {
+    affSimpleTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affSimpleTfoot.innerHTML = "";
+    affFullTbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affFullTfoot.innerHTML = "";
+    affDailyTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affDailyTfoot.innerHTML = "";
+    return;
+  }
+
+  const simpleRows = [];
+  const fullRows = [];
+
+  for (const m of sortedMonths) {
+    const r = monthlyMap[m];
+    simpleRows.push(`
+      <tr>
+        <td class="sticky-col">${m}</td>
+        <td style="text-align:left;">Doanh thu từ Shopee</td>
+        <td>${formatCurrency(r.gross)}</td>
+        <td style="color:#2ed573; font-weight:600;">${formatCurrency(r.netTk)}</td>
+      </tr>
+    `);
+
+    fullRows.push(`
+      <tr>
+        <td class="sticky-col">${m}</td>
+        <td>${formatCurrency(r.gross)}</td>
+        <td>${formatCurrency(r.mcn)}</td>
+        <td>${formatCurrency(r.afterMcn)}</td>
+        <td>${formatCurrency(r.feeDv)}</td>
+        <td>${formatCurrency(r.bill)}</td>
+        <td>${formatCurrency(r.taxVangLai)}</td>
+        <td>${formatCurrency(r.taxVat)}</td>
+        <td>${formatCurrency(r.taxPitKd)}</td>
+        <td style="color:#2ed573; font-weight:600;">${formatCurrency(r.netTk)}</td>
+      </tr>
+    `);
+  }
+
+  affSimpleTbody.innerHTML = simpleRows.join("");
+  affSimpleTfoot.innerHTML = `
+    <tr>
+      <td class="sticky-col">Tổng cộng</td>
+      <td style="text-align:left;">-</td>
+      <td>${formatCurrency(totalGross)}</td>
+      <td style="color:#2ed573;">${formatCurrency(totalNet)}</td>
+    </tr>
+  `;
+
+  affFullTbody.innerHTML = fullRows.join("");
+  affFullTfoot.innerHTML = `
+    <tr>
+      <td class="sticky-col">Tổng cộng</td>
+      <td>${formatCurrency(totalGross)}</td>
+      <td>${formatCurrency(totalMcn)}</td>
+      <td>${formatCurrency(totalAfterMcn)}</td>
+      <td>${formatCurrency(totalFeeDv)}</td>
+      <td>${formatCurrency(totalBill)}</td>
+      <td>${formatCurrency(totalTaxVangLai)}</td>
+      <td>${formatCurrency(totalTaxVat)}</td>
+      <td>${formatCurrency(totalTaxPitKd)}</td>
+      <td style="color:#2ed573;">${formatCurrency(totalNet)}</td>
+    </tr>
+  `;
+
+  // Render Daily Table
+  dailyList.sort((a, b) => a.timestamp - b.timestamp);
+  const dailyRows = dailyList.map(d => `
+    <tr>
+      <td class="sticky-col">${d.dateStr}</td>
+      <td style="text-align:left;">Doanh thu từ Shopee</td>
+      <td>${formatCurrency(d.amount)}</td>
+    </tr>
+  `);
+  affDailyTbody.innerHTML = dailyRows.join("");
+  affDailyTfoot.innerHTML = `
+    <tr>
+      <td class="sticky-col">Tổng Doanh Thu</td>
+      <td style="text-align:left;">${dailyList.length} ngày</td>
+      <td style="color:#ee4d2d; font-weight:800;">${formatCurrency(totalGross)}</td>
+    </tr>
+  `;
 }
 
 async function fetchAffiliateLive() {
@@ -509,6 +667,19 @@ popupExportExcel.addEventListener("click", () => {
 popupExportCsv.addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("tax_report.html") });
 });
+
+function setAffMode(mode) {
+  btnAffSimple.classList.toggle("active", mode === "simple");
+  btnAffFull.classList.toggle("active", mode === "full");
+  btnAffDaily.classList.toggle("active", mode === "daily");
+  affModeSimple.style.display = mode === "simple" ? "block" : "none";
+  affModeFull.style.display = mode === "full" ? "block" : "none";
+  affModeDaily.style.display = mode === "daily" ? "block" : "none";
+}
+
+btnAffSimple.addEventListener("click", () => setAffMode("simple"));
+btnAffFull.addEventListener("click", () => setAffMode("full"));
+btnAffDaily.addEventListener("click", () => setAffMode("daily"));
 
 (async () => {
   ensurePortConnected();

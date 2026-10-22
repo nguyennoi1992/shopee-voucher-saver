@@ -171,6 +171,118 @@
     th, td { padding: 10px 12px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
     th { color: var(--muted); font-weight: 700; background: rgba(255,255,255,0.03); }
 
+    /* Custom scrollbar for table containers */
+    .detail-section::-webkit-scrollbar,
+    .table-scroll-container::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .detail-section::-webkit-scrollbar-track,
+    .table-scroll-container::-webkit-scrollbar-track {
+      background: var(--bg-soft);
+      border-radius: 4px;
+    }
+    .detail-section::-webkit-scrollbar-thumb,
+    .table-scroll-container::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 4px;
+    }
+    .detail-section::-webkit-scrollbar-thumb:hover,
+    .table-scroll-container::-webkit-scrollbar-thumb:hover {
+      background: var(--brand);
+    }
+
+    /* Subnav mode switcher */
+    .subnav {
+      display: flex;
+      gap: 6px;
+      margin-top: 14px;
+      margin-bottom: 8px;
+      background: var(--bg-soft);
+      padding: 4px;
+      border-radius: 8px;
+    }
+    .subnav-btn {
+      flex: 1;
+      padding: 6px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .subnav-btn:hover {
+      color: var(--text);
+    }
+    .subnav-btn.active {
+      background: var(--brand);
+      color: #fff;
+    }
+
+    /* Scrollable table container */
+    .table-scroll-container {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 280px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-soft);
+      position: relative;
+    }
+
+    .sticky-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .sticky-table th, .sticky-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--line);
+      border-right: 1px solid rgba(255,255,255,0.05);
+      text-align: right;
+    }
+    .sticky-table th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: #272120;
+      color: #ff9f80;
+      font-weight: 700;
+      border-bottom: 1px solid #4a3b38;
+    }
+    .sticky-table tfoot td {
+      position: sticky;
+      bottom: 0;
+      z-index: 3;
+      background: #252229;
+      font-weight: 800;
+      color: #fff;
+      border-top: 1px solid #554f60;
+    }
+    .sticky-table .sticky-col {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: #1d1b22;
+      text-align: left;
+      font-weight: 600;
+    }
+    .sticky-table th.sticky-col {
+      z-index: 4;
+      background: #272120;
+    }
+    .sticky-table tfoot td.sticky-col {
+      z-index: 4;
+      background: #252229;
+    }
+
     .meta {
       margin-top: 12px;
       display: grid;
@@ -341,6 +453,72 @@
           <div class="stat-label">Thuế ước tính</div>
           <div id="affiliate-tax-total" class="stat-value warn">--</div>
         </div>
+      </div>
+
+      <!-- View mode switcher for records -->
+      <div class="subnav">
+        <button id="btn-aff-simple" class="subnav-btn active">📋 Đơn giản (Excel)</button>
+        <button id="btn-aff-full" class="subnav-btn">📊 Chi tiết (10 cột)</button>
+        <button id="btn-aff-daily" class="subnav-btn">📅 Bảng kê theo ngày</button>
+      </div>
+
+      <!-- Mode 1: Simple Table (Excel style) -->
+      <div id="aff-mode-simple" class="table-scroll-container">
+        <table class="sticky-table">
+          <thead>
+            <tr>
+              <th class="sticky-col">Tháng</th>
+              <th style="text-align:left;">Diễn giải</th>
+              <th>Doanh thu sàn</th>
+              <th>Ước thực nhận</th>
+            </tr>
+          </thead>
+          <tbody id="aff-simple-tbody">
+            <tr><td colspan="4" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>
+          </tbody>
+          <tfoot id="aff-simple-tfoot"></tfoot>
+        </table>
+      </div>
+
+      <!-- Mode 2: Full 10-column Table with H/V Scroll & Sticky Column -->
+      <div id="aff-mode-full" class="table-scroll-container" style="display:none;">
+        <table class="sticky-table" style="min-width: 820px;">
+          <thead>
+            <tr>
+              <th class="sticky-col">Tháng</th>
+              <th>HH gộp</th>
+              <th>Phí MCN</th>
+              <th>Sau MCN</th>
+              <th>Phí DV 0,98%</th>
+              <th>Thực nhận bill</th>
+              <th>10% TNCN</th>
+              <th>5% GTGT</th>
+              <th>5% TNCN</th>
+              <th>Ước về TK</th>
+            </tr>
+          </thead>
+          <tbody id="aff-full-tbody">
+            <tr><td colspan="10" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>
+          </tbody>
+          <tfoot id="aff-full-tfoot"></tfoot>
+        </table>
+      </div>
+
+      <!-- Mode 3: Daily Table (Excel style) -->
+      <div id="aff-mode-daily" class="table-scroll-container" style="display:none;">
+        <table class="sticky-table">
+          <thead>
+            <tr>
+              <th class="sticky-col">Ngày tháng</th>
+              <th style="text-align:left;">Diễn giải</th>
+              <th>Số tiền (VNĐ)</th>
+            </tr>
+          </thead>
+          <tbody id="aff-daily-tbody">
+            <tr><td colspan="3" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>
+          </tbody>
+          <tfoot id="aff-daily-tfoot"></tfoot>
+        </table>
       </div>
     </section>
   </div>

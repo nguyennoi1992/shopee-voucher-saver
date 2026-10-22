@@ -58,8 +58,13 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
 ### Cách 2: Sử dụng từ Extension Popup
 1. Mở icon extension trên thanh công cụ trình duyệt.
 2. Chuyển sang tab **“Sổ tay thuế”**.
-3. Bấm **“Đồng bộ dữ liệu từ Shopee Affiliate”** (cần có sẵn 1 tab Shopee đang mở).
-4. Chọn khoảng tháng và bấm **“Xuất Excel”** / **“Xuất CSV”** trực tiếp, hoặc bấm **“Mở Sổ tay thuế đầy đủ & Xuất Excel”** để xem giao diện chi tiết.
+3. Bấm **“Đồng bộ dữ liệu từ Shopee Affiliate”** (hoặc nạp tự động từ Cache 24h).
+4. Chọn khoảng tháng (**Từ tháng** - **Đến tháng**).
+5. Chuyển đổi giữa 3 chế độ xem trực quan ngay trong Popup:
+   * **📋 Đơn giản (Excel)**: Bảng tóm tắt tinh gọn theo tháng (`Tháng`, `Diễn giải`, `Doanh thu sàn`, `Ước thực nhận`).
+   * **📊 Chi tiết (10 cột)**: Đầy đủ 10 cột Sổ tay thuế, hỗ trợ thanh cuộn ngang/dọc mượt mà, cố định cột *Tháng* (Sticky Column) và ghim dòng tiêu đề/tổng cộng (Sticky Header/Footer).
+   * **📅 Bảng kê theo ngày**: Liệt kê chi tiết từng ngày trong kỳ đối soát (`Ngày tháng`, `Diễn giải: Doanh thu từ Shopee`, `Số tiền`).
+6. Bấm **“Xuất Excel”** / **“Xuất CSV”** trực tiếp, hoặc bấm **“Mở Sổ tay thuế đầy đủ & Xuất Excel”** để xem trên trang toàn màn hình.
 
 ### Cách 3: Dán dữ liệu thủ công (Offline)
 1. Mở trang báo cáo `tax_report.html`.

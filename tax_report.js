@@ -30,6 +30,8 @@
 
   const monthlyTbody = document.getElementById("monthly-tbody");
   const monthlyTfoot = document.getElementById("monthly-tfoot");
+  const simpleTbody = document.getElementById("simple-tbody");
+  const simpleTfoot = document.getElementById("simple-tfoot");
   const dailyContainer = document.getElementById("daily-tables-container");
 
   const pasteModal = document.getElementById("paste-modal");
@@ -323,10 +325,13 @@
     let totalNetTk = 0;
 
     let tbodyHtml = "";
+    let simpleHtml = "";
 
     if (activeMonths.length === 0) {
       monthlyTbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--muted); padding: 30px;">Không có dữ liệu trong khoảng thời gian đã chọn.</td></tr>`;
       monthlyTfoot.innerHTML = "";
+      if (simpleTbody) simpleTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--muted); padding: 30px;">Không có dữ liệu trong khoảng thời gian đã chọn.</td></tr>`;
+      if (simpleTfoot) simpleTfoot.innerHTML = "";
       return;
     }
 
@@ -395,6 +400,15 @@
           <td style="font-weight:700; color:#2d3436;">${formatVnd(netTk)}</td>
         </tr>
       `;
+
+      simpleHtml += `
+        <tr>
+          <td>${mKey}</td>
+          <td style="text-align: left;">Doanh thu từ Shopee</td>
+          <td>${formatVnd(gross)}</td>
+          <td style="font-weight:700; color:#107c41;">${formatVnd(netTk)}</td>
+        </tr>
+      `;
     }
 
     monthlyTbody.innerHTML = tbodyHtml;
@@ -413,6 +427,20 @@
         <td style="font-weight:800; color:#ee4d2d;">${formatVnd(totalNetTk)}</td>
       </tr>
     `;
+
+    if (simpleTbody) {
+      simpleTbody.innerHTML = simpleHtml;
+    }
+    if (simpleTfoot) {
+      simpleTfoot.innerHTML = `
+        <tr>
+          <td>Cộng</td>
+          <td style="text-align: left;">-</td>
+          <td>${formatVnd(totalGross)}</td>
+          <td style="font-weight:800; color:#107c41;">${formatVnd(totalNetTk)}</td>
+        </tr>
+      `;
+    }
 
     // Dynamic titles
     if (activeMonths.length > 0) {
