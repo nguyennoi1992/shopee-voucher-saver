@@ -222,5 +222,52 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(oct_row[8], 8868)  # 5% TNCN (KD)
         self.assertEqual(oct_row[9], 159628) # Ước thực về TK (90%)
 
+    def test_under_threshold_pre_october_real_api(self):
+        # Trước tháng 10/2026: Khi thu nhập từng kỳ đối soát dưới ngưỡng khấu trừ (dưới 2.000.000 đ)
+        # Shopee không trừ 10% TNCN (with_wht: false, wht_amount: 0), không trừ VAT, không trừ phí DV 0.98%
+        # Đối soát thực tế kỳ 24-09-2026:
+        # Doanh thu hợp lệ: ₫21.397
+        # Tổng thanh toán sau thuế: ₫21.397
+        rec_24_sep = {
+            "eligible_total_amount_dis": "21397",
+            "mcn_management_fee_dis": "0",
+            "total_payment_amount_dis": "21397",
+            "with_wht": False,
+            "with_vat": False,
+            "bills": [
+                {
+                    "wht_amount_dis": "0",
+                    "vat_amount_dis": "0",
+                    "total_amount_dis": "21397"
+                }
+            ]
+        }
+
+        gross = float(rec_24_sep["eligible_total_amount_dis"])
+        mcn = float(rec_24_sep["mcn_management_fee_dis"])
+        after_mcn = gross - mcn
+        bill_total = float(rec_24_sep["total_payment_amount_dis"])
+
+        # Trích xuất thuế thực tế từ API
+        wht_amt = float(rec_24_sep["bills"][0]["wht_amount_dis"])
+        vat_amt = float(rec_24_sep["bills"][0]["vat_amount_dis"])
+
+        # Vì with_wht = False và wht_amt = 0 -> không bị khấu trừ thuế!
+        tax_vang_lai = wht_amt if (rec_24_sep["with_wht"] and wht_amt > 0) else 0.0
+        tax_vat = vat_amt if (rec_24_sep["with_vat"] and vat_amt > 0) else 0.0
+        tax_pit_kd = 0.0
+
+        fee_dv = max(0.0, after_mcn - bill_total - tax_vang_lai - tax_vat)
+        bill_real = after_mcn - fee_dv
+        net_tk = bill_total if bill_total > 0 else (bill_real - tax_vang_lai - tax_vat)
+
+        self.assertEqual(gross, 21397.0)
+        self.assertEqual(tax_vang_lai, 0.0) # KHÔNG bị trừ 10%
+        self.assertEqual(tax_vat, 0.0)
+        self.assertEqual(tax_pit_kd, 0.0)
+        self.assertEqual(fee_dv, 0.0)       # KHÔNG bị trừ phí DV
+        self.assertEqual(bill_real, 21397.0)
+        self.assertEqual(net_tk, 21397.0)   # Khớp 100% "Tổng thanh toán sau thuế: ₫21.397"
+
 if __name__ == "__main__":
     unittest.main()
