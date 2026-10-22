@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Shopee Voucher Saver",
-  "description": "Auto-click all Shopee vouchers (Lưu).",
-  "version": "1.0",
+  "name": "Shopee Voucher Saver & Affiliate Tax",
+  "description": "Lưu voucher Shopee, thống kê chi tiêu tài khoản và Sổ tay thuế / Xuất doanh thu Shopee Affiliate (Excel, CSV).",
+  "version": "2.0",
   "permissions": [
     "scripting",
-    "tabs"
+    "tabs",
+    "storage"
   ],
   "host_permissions": [
     "*://shopee.vn/*",
@@ -15,9 +16,34 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Save Shopee Vouchers",
+    "default_popup": "popup.html",
+    "default_title": "Shopee Voucher Saver & Affiliate Tax",
     "default_icon": "icon.png"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://affiliate.shopee.vn/payment/*"
+      ],
+      "js": ["affiliate_content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "tax_report.html",
+        "tax_report.js",
+        "stats.html",
+        "stats.js",
+        "icon.png"
+      ],
+      "matches": [
+        "*://shopee.vn/*",
+        "*://*.shopee.vn/*"
+      ]
+    }
+  ],
   "icons": {
     "48": "icon.png",
     "128": "icon.png"

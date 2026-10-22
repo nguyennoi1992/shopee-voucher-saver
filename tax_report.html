@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sổ tay thuế & Báo cáo doanh thu Shopee Affiliate</title>
+  <style>
+    :root {
+      --primary: #ee4d2d;
+      --primary-dark: #d03e1f;
+      --header-bg: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+      --bg: #f8f9fa;
+      --card-bg: #ffffff;
+      --text: #2d3436;
+      --muted: #636e72;
+      --border: #dfe6e9;
+      --warn-bg: #fff9e6;
+      --warn-border: #ffeaa7;
+      --warn-text: #d68910;
+      --table-header-bg: #ee4d2d;
+      --table-header-text: #ffffff;
+      --shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 24px auto;
+      padding: 0 20px;
+    }
+
+    /* Header Banner matching Image 1 */
+    .banner {
+      background: var(--header-bg);
+      color: white;
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .banner-icon {
+      width: 32px;
+      height: 32px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .banner h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    /* Warning Alert matching Image 1 */
+    .alert-warning {
+      margin-top: 16px;
+      background-color: var(--warn-bg);
+      border-left: 4px solid var(--warn-text);
+      border-radius: 8px;
+      padding: 14px 18px;
+      color: #7d5208;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .alert-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* Controls Bar */
+    .controls-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-top: 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .filter-item select,
+    .filter-item input {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      cursor: pointer;
+    }
+
+    .filter-item select:focus,
+    .filter-item input:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-group {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      border-radius: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease-in-out;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover { background-color: var(--primary-dark); }
+
+    .btn-success {
+      background-color: #00b894;
+      color: white;
+    }
+    .btn-success:hover { background-color: #00a383; }
+
+    .btn-excel {
+      background-color: #107c41;
+      color: white;
+    }
+    .btn-excel:hover { background-color: #0b5e31; }
+
+    .btn-outline {
+      background: #fff;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-outline:hover {
+      background: #f1f2f6;
+      border-color: #ced6e0;
+    }
+
+    /* Tab Switcher */
+    .view-tabs {
+      display: flex;
+      gap: 8px;
+      margin-top: 24px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0;
+    }
+
+    .view-tab {
+      padding: 10px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+    }
+
+    .view-tab:hover { color: var(--primary); }
+    .view-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    /* Content Panels */
+    .tab-content {
+      display: none;
+      margin-top: 16px;
+    }
+    .tab-content.active { display: block; }
+
+    .table-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow-x: auto;
+      margin-bottom: 30px;
+    }
+
+    .table-title {
+      padding: 18px 20px 10px;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* Main Tax Table (Image 1) */
+    table.tax-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      min-width: 1000px;
+    }
+
+    table.tax-table th {
+      background-color: var(--table-header-bg);
+      color: var(--table-header-text);
+      padding: 12px 14px;
+      font-weight: 700;
+      text-align: right;
+      white-space: nowrap;
+      border: 1px solid #e04122;
+    }
+
+    table.tax-table th:first-child {
+      text-align: left;
+    }
+
+    table.tax-table td {
+      padding: 11px 14px;
+      border: 1px solid #edf2f7;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    table.tax-table td:first-child {
+      text-align: left;
+      font-weight: 600;
+      color: #4a5568;
+    }
+
+    table.tax-table tr:nth-child(even) td {
+      background-color: #fafbfc;
+    }
+
+    table.tax-table tr:hover td {
+      background-color: #f7fafc;
+    }
+
+    table.tax-table tfoot td {
+      font-weight: 800;
+      background-color: #edf2f7 !important;
+      border-top: 2px solid #cbd5e0;
+      color: #1a202c;
+    }
+
+    /* Daily Revenue Table (Image 2) */
+    .month-daily-container {
+      margin-bottom: 28px;
+    }
+
+    table.daily-table {
+      width: 100%;
+      max-width: 600px;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      margin: 12px 20px 24px;
+      border: 1px solid #cbd5e0;
+    }
+
+    table.daily-table th {
+      background-color: #f8fafc;
+      color: #2d3748;
+      border: 1px solid #cbd5e0;
+      padding: 9px 12px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    table.daily-table td {
+      border: 1px solid #cbd5e0;
+      padding: 8px 12px;
+    }
+
+    table.daily-table td.col-date { text-align: center; width: 100px; }
+    table.daily-table td.col-desc { text-align: left; }
+    table.daily-table td.col-amt { text-align: right; font-variant-numeric: tabular-nums; width: 130px; }
+
+    table.daily-table tr.month-header td {
+      font-weight: 700;
+      background-color: #fff;
+    }
+
+    table.daily-table tr.total-row td {
+      font-weight: 800;
+      background-color: #fff;
+    }
+
+    /* Status Bar */
+    .status-bar {
+      margin-top: 14px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      background: #edf2f7;
+      color: #4a5568;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Modal for Pasting */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: #fff;
+      border-radius: var(--radius);
+      width: min(650px, calc(100% - 32px));
+      padding: 24px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    .modal h2 { margin: 0 0 12px; font-size: 18px; }
+    .modal p { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+
+    .modal textarea {
+      width: 100%;
+      height: 180px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: monospace;
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+    }
+
+    .modal textarea:focus { border-color: var(--primary); }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header Banner (Image 1) -->
+    <header class="banner">
+      <div class="banner-icon">📋</div>
+      <h1 id="banner-title">Sổ tay thuế 2026</h1>
+    </header>
+
+    <!-- Warning Alert (Image 1) -->
+    <div class="alert-warning">
+      <span class="alert-icon">⚠️</span>
+      <span>Số liệu mang tính <strong>ước tính</strong> từ dữ liệu Affiliate Shopee; không phải tư vấn thuế. Hãy kiểm tra với cơ quan thuế hoặc kế toán trước khi kê khai.</span>
+    </div>
+
+    <!-- Controls Bar -->
+    <section class="controls-card">
+      <div class="filter-group">
+        <div class="filter-item">
+          <label for="select-from-month">Từ tháng:</label>
+          <select id="select-from-month"></select>
+        </div>
+        <div class="filter-item">
+          <label for="select-to-month">Đến tháng:</label>
+          <select id="select-to-month"></select>
+        </div>
+        <div class="filter-item">
+          <label for="select-tax-mode">Chế độ tính:</label>
+          <select id="select-tax-mode">
+            <option value="actual">Theo thực tế trên Bill</option>
+            <option value="hkd">Hộ kinh doanh (5% GTGT + 5% TNCN)</option>
+            <option value="individual">Cá nhân vãng lai (10% TNCN)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btn-group">
+        <button id="btn-fetch-live" class="btn btn-primary" title="Tải dữ liệu trực tiếp từ tab Shopee Affiliate đang mở">
+          <span>🔄</span> Tải từ Shopee
+        </button>
+        <button id="btn-paste-modal" class="btn btn-outline" title="Dán dữ liệu JSON hoặc bảng copy từ Shopee">
+          <span>📋</span> Dán dữ liệu
+        </button>
+        <button id="btn-export-excel" class="btn btn-excel" title="Xuất file Excel (.xls) theo mẫu doanh thu">
+          <span>📊</span> Xuất Excel
+        </button>
+        <button id="btn-export-csv" class="btn btn-success" title="Xuất file CSV UTF-8">
+          <span>📥</span> Xuất CSV
+        </button>
+      </div>
+    </section>
+
+    <!-- Status Bar -->
+    <div id="status-bar" class="status-bar">
+      <span id="status-text">Đang kiểm tra kết nối với Shopee Affiliate...</span>
+      <span id="status-meta"></span>
+    </div>
+
+    <!-- Tab View Switcher -->
+    <div class="view-tabs">
+      <button class="view-tab active" data-tab="tab-monthly">Theo tháng 2026 (Sổ tay thuế)</button>
+      <button class="view-tab" data-tab="tab-daily">Chi tiết doanh thu theo ngày (Mẫu kê khai)</button>
+    </div>
+
+    <!-- Tab 1: Monthly Sổ tay thuế Table (Image 1) -->
+    <div id="tab-monthly" class="tab-content active">
+      <div class="table-card">
+        <div id="monthly-table-title" class="table-title">Theo tháng 2026 (theo ngày đơn hoàn thành, GMT+7)</div>
+        <table class="tax-table">
+          <thead>
+            <tr>
+              <th>Tháng</th>
+              <th>HH gộp</th>
+              <th>Phí MCN</th>
+              <th>Sau MCN</th>
+              <th>Phí DV 0,98%</th>
+              <th>Thực nhận theo bill</th>
+              <th>10% TNCN (vãng lai)</th>
+              <th>5% GTGT</th>
+              <th>5% TNCN (KD)</th>
+              <th>Ước thực về TK</th>
+            </tr>
+          </thead>
+          <tbody id="monthly-tbody">
+            <tr>
+              <td colspan="10" style="text-align: center; color: var(--muted); padding: 30px;">Chưa có dữ liệu. Hãy bấm "Tải từ Shopee" hoặc "Dán dữ liệu".</td>
+            </tr>
+          </tbody>
+          <tfoot id="monthly-tfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 2: Daily Revenue Breakdown (Image 2) -->
+    <div id="tab-daily" class="tab-content">
+      <div class="table-card">
+        <div class="table-title">Bảng kê chi tiết doanh thu từ Shopee theo ngày (Chưa trừ phí)</div>
+        <div id="daily-tables-container">
+          <p style="padding: 20px; color: var(--muted); text-align: center;">Chưa có dữ liệu theo ngày.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paste Data Modal -->
+  <div id="paste-modal" class="modal-backdrop">
+    <div class="modal">
+      <h2>Dán dữ liệu Shopee Affiliate</h2>
+      <p>Dán dữ liệu JSON từ API <code>/api/v3/payment/billing_list</code> hoặc danh sách billing để phân tích và lập sổ tay thuế.</p>
+      <textarea id="paste-textarea" placeholder='{"code":0,"data":{"list":[...]}}'></textarea>
+      <div class="modal-actions">
+        <button id="btn-close-modal" class="btn btn-outline">Hủy</button>
+        <button id="btn-parse-paste" class="btn btn-primary">Xử lý & Cập nhật</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="tax_report.js"></script>
+</body>
+</html>

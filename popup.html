@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shopee Voucher Saver</title>
+  <style>
+    :root {
+      --brand: #ff5b45;
+      --brand-deep: #df4630;
+      --bg: #1f1f1f;
+      --bg-soft: #2a2a2a;
+      --panel: #242424;
+      --panel-soft: #2b2b2b;
+      --text: #f8f3ef;
+      --muted: #b9aaa1;
+      --line: #3f3a37;
+      --ok: #79d27c;
+      --warn: #f8a548;
+      --bad: #ff6b57;
+      --shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      width: 460px;
+      min-height: 720px;
+      max-height: 780px;
+      overflow: auto;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      color: var(--text);
+      background: linear-gradient(180deg, #232323 0%, #1d1d1d 100%);
+    }
+
+    .shell {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #ff6f59 0%, #ff8f3d 100%);
+      color: #fff;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero h1 { margin: 0 0 8px; font-size: 22px; }
+    .hero p { margin: 0; font-size: 13px; line-height: 1.55; opacity: 0.95; }
+
+    .nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .nav button {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: var(--panel-soft);
+      color: var(--text);
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .nav button.active {
+      background: var(--brand);
+      border-color: var(--brand);
+      color: #fff;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .section-title { margin: 0 0 10px; font-size: 16px; }
+    .actions { display: grid; gap: 10px; }
+
+    button.action {
+      width: 100%;
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button.action:disabled { opacity: 0.65; cursor: wait; }
+
+    .primary { background: var(--brand); color: #fff; }
+    .secondary { background: #393433; color: var(--text); border: 1px solid var(--line); }
+    .danger { background: #f04f56; color: #fff; }
+
+    .status {
+      margin-top: 12px;
+      min-height: 44px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--bg-soft);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      border: 1px solid var(--line);
+    }
+
+    .status.success { color: var(--ok); }
+    .status.error { color: var(--bad); }
+
+    .scan-panel {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .scan-hint {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .stat-card {
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .stat-card.hero-card {
+      grid-column: 1 / -1;
+      background: linear-gradient(180deg, #2b2b2b 0%, #252525 100%);
+    }
+
+    .stat-label { font-size: 12px; color: var(--muted); }
+    .stat-value { margin-top: 6px; font-size: 22px; font-weight: 800; line-height: 1.2; }
+    .stat-note { margin-top: 6px; font-size: 12px; color: var(--muted); }
+    .brand { color: var(--bad); }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    .bad { color: var(--bad); }
+
+    .detail-section {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: var(--panel-soft);
+    }
+
+    .detail-section h3 { margin: 0; padding: 12px 12px 0; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 10px 12px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 700; background: rgba(255,255,255,0.03); }
+
+    .meta {
+      margin-top: 12px;
+      display: grid;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .log-box {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-soft);
+      padding: 12px;
+    }
+
+    .log-box h3 { margin: 0 0 8px; font-size: 13px; }
+
+    #debug-log {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #e8dbd2;
+      max-height: 220px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <h1>Shopee Voucher Saver</h1>
+      <p>Phan he bao cao da chuyen sang scan nen. Sau khi ket noi va bat dau phan tich, ban co the dong popup va mo lai de theo doi tien trinh hoac xem du lieu cache.</p>
+    </section>
+
+    <div class="nav">
+      <button id="show-voucher" class="active">Voucher</button>
+      <button id="show-report">Mua sắm</button>
+      <button id="show-affiliate">Sổ tay thuế</button>
+    </div>
+
+    <section id="voucher-view" class="view active panel">
+      <h2 class="section-title">Luu voucher</h2>
+      <div class="actions">
+        <button id="save-vouchers" class="action primary">Luu tat ca voucher</button>
+      </div>
+      <div id="voucher-status" class="status">Mo mot tab shopee.vn, sau do bam de luu voucher tren trang hien tai.</div>
+    </section>
+
+    <section id="report-view" class="view panel">
+      <h2 class="section-title">Thong ke Sop Pi</h2>
+      <div class="actions">
+        <button id="load-report" class="action primary">Bat dau phan tich</button>
+        <button id="stop-report" class="action danger" style="display:none">Dung</button>
+        <button id="open-shopee" class="action secondary">Mo Shopee</button>
+      </div>
+      <div id="report-status" class="status">Can mot tab Shopee dang dang nhap. Progress se tiep tuc chay nen sau khi da ket noi.</div>
+
+      <div class="scan-panel">
+        <div id="scan-progress-text" class="scan-hint">Chua co tien trinh dang chay.</div>
+        <div id="scan-background-hint" class="scan-hint" style="display:none">Ban co the dong cua so nay. Qua trinh phan tich van tiep tuc chay ngam.</div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="stat-card hero-card">
+          <div class="stat-label">Tong chi tieu</div>
+          <div id="total-spent" class="stat-value brand">--</div>
+          <div id="spent-note" class="stat-note">Chua co du lieu.</div>
+        </div>
+        <div class="stat-card"><div class="stat-label">Don hang</div><div id="order-count" class="stat-value bad">--</div></div>
+        <div class="stat-card"><div class="stat-label">San pham</div><div id="item-count" class="stat-value bad">--</div></div>
+        <div class="stat-card"><div class="stat-label">Shop</div><div id="shop-count" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Don dau tien</div><div id="first-order" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Don gan nhat</div><div id="last-order" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Trung binh / don</div><div id="avg-order" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Trung binh / thang</div><div id="avg-month" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Don TB / thang</div><div id="avg-orders-month" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Tong tiet kiem</div><div id="total-saved" class="stat-value warn">--</div></div>
+        <div class="stat-card"><div class="stat-label">Thang mua nhieu nhat</div><div id="peak-month" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Ngay hay mua nhat</div><div id="fav-day" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Gio hay dat hang</div><div id="fav-hour" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Chuoi thang lien tuc</div><div id="streak" class="stat-value">--</div></div>
+        <div class="stat-card"><div class="stat-label">Toc do chi tieu</div><div id="velocity" class="stat-value">--</div></div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Chi tieu theo thang</h3>
+        <table>
+          <thead><tr><th>Thang</th><th>So tien</th></tr></thead>
+          <tbody id="monthly-body"><tr><td colspan="2">Chua co du lieu</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="detail-section">
+        <h3>Shop mua nhieu nhat</h3>
+        <table>
+          <thead><tr><th>Shop</th><th>Don</th><th>So tien</th></tr></thead>
+          <tbody id="shops-body"><tr><td colspan="3">Chua co du lieu</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="detail-section">
+        <h3>San pham mua nhieu nhat</h3>
+        <table>
+          <thead><tr><th>San pham</th><th>So luong</th></tr></thead>
+          <tbody id="items-body"><tr><td colspan="2">Chua co du lieu</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="detail-section">
+        <h3>San pham dat nhat</h3>
+        <table>
+          <thead><tr><th>San pham</th><th>Gia</th></tr></thead>
+          <tbody id="expensive-body"><tr><td colspan="2">Chua co du lieu</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="meta">
+        <div id="report-headline">Danh gia: cho san du lieu</div>
+        <div id="report-tab">Tab Shopee: chua xac dinh</div>
+        <div id="report-progress">Tien do: chua tai</div>
+        <div id="report-updated">Cap nhat lan cuoi: chua co</div>
+      </div>
+
+      <div class="log-box">
+        <h3>Log kiem tra</h3>
+        <pre id="debug-log">Chua co log.</pre>
+      </div>
+    </section>
+
+    <section id="affiliate-view" class="view panel">
+      <h2 class="section-title">Sổ tay thuế Shopee Affiliate</h2>
+      <div class="actions">
+        <button id="open-tax-page" class="action primary">Mở Sổ tay thuế đầy đủ & Xuất Excel</button>
+        <button id="fetch-affiliate-data" class="action secondary">Đồng bộ dữ liệu từ Shopee Affiliate</button>
+      </div>
+      <div id="affiliate-status" class="status">Sử dụng trên tab affiliate.shopee.vn/payment/payout_record để lấy doanh thu chuẩn nhất.</div>
+
+      <div class="scan-panel">
+        <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between;">
+          <div style="font-size: 12px; color: var(--muted); font-weight: 600;">Chọn khoảng tháng:</div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <select id="popup-from-month" style="background:var(--bg-soft); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px;"></select>
+            <span style="font-size:12px; color:var(--muted);">-</span>
+            <select id="popup-to-month" style="background:var(--bg-soft); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px;"></select>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="popup-export-excel" class="action" style="background:#107c41; color:#fff; padding:9px 10px; font-size:12px;">📊 Xuất Excel (.xls)</button>
+          <button id="popup-export-csv" class="action" style="background:#00b894; color:#fff; padding:9px 10px; font-size:12px;">📥 Xuất CSV</button>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="stat-card hero-card">
+          <div class="stat-label">Tổng doanh thu (HH gộp)</div>
+          <div id="affiliate-total-gross" class="stat-value brand">--</div>
+          <div class="stat-note">Tiền sàn trả chưa trừ phí</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Ước thực về TK</div>
+          <div id="affiliate-net-tk" class="stat-value ok">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Thuế ước tính</div>
+          <div id="affiliate-tax-total" class="stat-value warn">--</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
