@@ -9,7 +9,7 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
 * **Tự động trích xuất dữ liệu từ Shopee Affiliate**:
   * Tích hợp trực tiếp trên trang thanh toán `https://affiliate.shopee.vn/payment/payout_record` và `/payment/billing`.
   * Hiển thị nút bấm tiện ích nổi (Floating Pill) ngay góc màn hình: *“📊 Sổ tay thuế & Xuất Excel Shopee”*.
-  * Tự động gọi API nội bộ `/api/v3/payment/billing_list` với phiên đăng nhập hiện tại để lấy dữ liệu doanh thu chính xác nhất.
+  * Gọi **GraphQL `getPaymentPayoutBillingList`** (`/api/v3/gql?q=getPayoutList`) để lấy toàn bộ kỳ chi trả (Payout Record), **tự động lặp đủ trang** theo `pagination.totalCount` (portal chỉ trả ~10 kỳ/trang), cùng với `/api/v3/payment/billing_list` (theo ngày hoàn thành đơn) cho **cả hai nguồn trong một phiên** dùng phiên đăng nhập hiện tại (header `CSRF-token`, `Affiliate-Program-Type`).
 * **Cơ chế Cache thông minh 24h (Tối ưu API)**:
   * Dữ liệu đối soát các tháng đã hoàn thành là cố định (bất biến), vì vậy extension tự động lưu vào bộ nhớ đệm `chrome.storage.local`.
   * **Chỉ gọi API khi**:
@@ -76,19 +76,25 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
 
 ## 3. Công thức tính toán & Quy chuẩn doanh thu
 
-### 3.1. Phân định cơ chế thuế theo mốc thời gian & Ngưỡng khấu trừ
+### 3.1. Phân định cơ chế thuế theo mốc thời gian & Nguồn dữ liệu chuẩn
 
-* **Giai đoạn trước Tháng 10/2026**:
-  * **Ngưỡng khấu trừ thuế TNCN**: Theo quy định pháp luật và chính sách chi trả của Shopee trước 10/2026, thu nhập vãng lai **từ 2.000.000 đ/lần chi trả trở lên** mới thuộc diện khấu trừ 10% tại nguồn.
-  * **Dữ liệu thực tế từ API**: Các kỳ đối soát có thu nhập dưới ngưỡng này có `with_wht: false` và `wht_amount: 0`. Shopee **không khấu trừ 10% thuế TNCN** và **không trừ phí DV 0,98%**, người dùng nhận trọn vẹn 100% doanh thu (`total_payment_amount_dis = eligible_total_amount_dis`).
-  * Extension tự động trích xuất trực tiếp số tiền khấu trừ thực tế từ API (`wht_amount_dis`, `total_payment_amount_dis`), **không tự ý fix cứng áp 10%** nếu kỳ thanh toán không bị trừ thuế.
+* **Nguồn dữ liệu tổng hợp theo tháng (Payout Record là chuẩn khi có kỳ chi trả)**:
+  * GraphQL `getPaymentPayoutBillingList` trả về `payoutList[].paymentPayout` chỉ gồm 2 số: `eligibleTotalAmount` (Tiền sàn trả - Gross) và `totalPaymentAmount` (Thực nhận về TK), các số tiền trả về dạng **micro-unit (x100.000)** (ví dụ `"7179000000"` = 71.790 đ).
+  * Tháng **có** kỳ chi trả Payout => tổng hợp theo từng bill (chuẩn đối soát từng bill, khớp tài khoản ngân hàng).
+  * Tháng **không có** kỳ chi trả Payout => fallback tổng hợp theo `billing_list` (ngày hoàn thành đơn).
+* **Phân rã từng kỳ chi trả (reconciliation)** — vì API chỉ trả 2 số, extension suy luận từ chênh lệch `diff = Gross - Thực nhận`:
+  * `diff ≈ 10,98% × Gross` => kỳ bị trừ thuế: `5% VAT = 5% PIT = round(5% × Gross)`, `Phí DV = phần còn lại` (bằng đúng 0,98%).
+  * `diff ≈ 0,98% × Gross` => kỳ dưới ngưỡng/chưa trừ thuế: `Phí DV = diff`, `VAT = PIT = 0`.
+  * `Phí DV 0,98%` **có tồn tại thật từ 10/2026** (2.032 đ trên tổng 5 kỳ tháng 10 - đã kiểm định).
+* **Giai đoạn trước Tháng 10/2026** (đối soát và fallback):
+  * Phí DV 0,98% theo `service_fee` hoặc chênh lệch `Sau MCN` - `billTotal`.
+  * Thuế khấu trừ vãng lai 10% TNCN chỉ hiển thị khi API thực tế có trừ (`wht_amount` / kỳ chi trả có phần dư sau phí) - không tự ý fix cứng 10%.
 * **Giai đoạn từ Tháng 10/2026 trở đi (Cập nhật chính sách mới)**:
   * Shopee chính thức **tách riêng 2 khoản thuế khấu trừ tại nguồn** cho toàn bộ Publisher / KOC:
     * **5% Thuế Giá trị gia tăng (VAT / GTGT)**
     * **5% Thuế Thu nhập cá nhân (PIT / TNCN)**
     * **10% TNCN (vãng lai) = 0 đ** (không gộp chung như trước).
-  * **Không trừ phí dịch vụ 0,98%** trên các khoản thanh toán đối soát mới.
-  * **Thực nhận về TK = 90%** của Doanh thu hợp lệ sau MCN (`Sau MCN` - `5% VAT` - `5% PIT`). Khớp 100% với mục *"Tổng thanh toán sau thuế"* trên trang chi tiết khoản thanh toán của Shopee.
+  * **Thực nhận về TK = Doanh thu hợp lệ - 5% VAT - 5% PIT** = 90% của doanh thu hợp lệ sau phí DV. Khớp 100% với mục *"Tổng thanh toán sau thuế"* trên trang chi tiết khoản thanh toán của Shopee (bảng chân lý mục 3.4).
 
 ### 3.2. Bảng quy chuẩn các khoản mục & Đồng bộ tính toán giữa các Tab
 
@@ -98,17 +104,17 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
   1. `Sau MCN` - `Phí DV 0,98%` = `Thực nhận theo bill`
   2. `Thực nhận theo bill` - `10% TNCN (vãng lai)` - `5% GTGT` - `5% TNCN (KD)` = `Ước thực về TK`
 
-| Khoản mục | Quy tắc tính trước 10/2026 | Quy tắc tính từ 10/2026 | Ghi chú |
+| Khoản mục | Quy tắc tính trước 10/2026 | Quy tắc tính từ 10/2026 (theo Payout Record) | Ghi chú |
 | :--- | :--- | :--- | :--- |
-| **Doanh thu (HH gộp)** | Tổng `eligible_total_amount_dis` | Tổng `eligible_total_amount_dis` | Tiền sàn trả chưa trừ bất kỳ phí hay thuế nào. Khớp với tổng doanh thu theo ngày. |
-| **Phí MCN** | `mcn_management_fee_dis` | `mcn_management_fee_dis` | Phí quản lý mạng lưới nếu có tham gia MCN. |
+| **Doanh thu (HH gộp)** | Tổng `eligible_total_amount_dis` | Tổng `eligibleTotalAmount` (micro-unit ÷ 100.000) | Tiền sàn trả chưa trừ bất kỳ phí hay thuế nào. Khớp với tổng doanh thu theo ngày. |
+| **Phí MCN** | `mcn_management_fee_dis` | `payoutValidationInfo.mcnManagementFee` (nếu có) | Phí quản lý mạng lưới nếu có tham gia MCN. |
 | **Sau MCN** | `HH gộp` - `Phí MCN` | `HH gộp` - `Phí MCN` | Số tiền cơ sở sau khi trừ MCN. |
-| **Phí DV 0,98%** | Lấy theo `service_fee_dis` hoặc chênh lệch giữa `Sau MCN` và `billTotal` | **0 đ** | Shopee không trừ phí DV 0,98% từ 10/2026. |
-| **Thực nhận bill** | `Sau MCN` - `Phí DV 0,98%` | Bằng chính `Sau MCN` | Doanh thu trước khi trừ các khoản thuế khấu trừ tại nguồn. |
-| **10% TNCN (vãng lai)** | Theo `wht_amount_dis` từ API (**0 đ** nếu dưới ngưỡng) | **0 đ** | Từ 10/2026 đã tách riêng thành 5% VAT và 5% PIT. |
-| **5% GTGT** | 0 đ (hoặc 5% nếu chọn chế độ HKD) | **5%** (hoặc theo `vat_amount_dis`) | Thuế GTGT khấu trừ tại nguồn. |
-| **5% TNCN (KD/PIT)** | 0 đ (hoặc 5% nếu chọn chế độ HKD) | **5%** (hoặc theo `wht_amount_dis`) | Thuế TNCN khấu trừ tại nguồn. |
-| **Ước thực về TK** | `Thực nhận bill` - các loại thuế khấu trừ | `Thực nhận bill` - `5% VAT` - `5% PIT` | Khớp chính xác giữa Tab Đơn giản, Tab Chi tiết và Card Thống kê. |
+| **Phí DV 0,98%** | Lấy theo `service_fee_dis` hoặc chênh lệch giữa `Sau MCN` và `billTotal` | Suy luận từ chênh lệch: `diff` khi kỳ chưa trừ thuế, `diff - 2×VAT` khi kỳ đã trừ thuế (≈ 0,98% × Gross - **có tồn tại thật từ 10/2026**) | Ví dụ tháng 10/2026: Phí DV = 2.032 đ trên 5 kỳ. |
+| **Thực nhận bill** | `Sau MCN` - `Phí DV 0,98%` | `Sau MCN` - `Phí DV 0,98%` | Doanh thu hợp lệ trước khi trừ thuế khấu trừ tại nguồn. |
+| **10% TNCN (vãng lai)** | Theo phần dư sau phí của kỳ chi trả (**0 đ** nếu dưới ngưỡng) | **0 đ** | Từ 10/2026 đã tách riêng thành 5% VAT và 5% PIT. |
+| **5% GTGT** | 0 đ (hoặc 5% nếu chọn chế độ HKD) | **round(5% × Gross)** theo từng kỳ | Thuế GTGT khấu trừ tại nguồn. |
+| **5% TNCN (KD/PIT)** | 0 đ (hoặc 5% nếu chọn chế độ HKD) | **round(5% × Gross)** theo từng kỳ (bằng đúng giá trị Shopee khấu trừ, kể cả round half-up như 3.589,5 → 3.590) | Thuế TNCN khấu trừ tại nguồn. |
+| **Ước thực về TK** | `Thực nhận bill` - các loại thuế khấu trừ | Lấy trực tiếp `totalPaymentAmount` của từng kỳ | Khớp chính xác giữa Tab Đơn giản, Tab Chi tiết và Card Thống kê. |
 
 ### 3.3. Cơ chế Hóa đơn phí dịch vụ (service_fee_invoice) & Đối soát thanh toán
 
@@ -129,7 +135,9 @@ Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee 
 Extension hỗ trợ đồng bộ và nhận diện tự động cả 2 nguồn dữ liệu chính từ Shopee Affiliate:
 
 1. **Theo Lịch sử thanh toán (`payment/payout_record` - Khuyên dùng cho Sổ tay thuế & Tiền về TK)**:
-   * **Nguồn API**: GraphQL `getPaymentPayoutBillingList` (`/api/v3/gql?q=getPayoutList`) hoặc chi tiết từng bill `getPayoutDetail`.
+   * **Nguồn API**: GraphQL `getPaymentPayoutBillingList` (`POST /api/v3/gql?q=getPayoutList`, `operationName: "getPaymentPayoutBillingList"`, variables `{pageSize, pageNum}`, headers `Content-Type`, `CSRF-token`, `Affiliate-Program-Type`, `credentials: include`) hoặc chi tiết từng bill `getPayoutDetail`.
+   * **Phân trang**: portal mặc định trả ~10 kỳ/trang; extension lặp `pageNum` (pageSize 100, tối đa 20 trang) cho tới khi đủ `pagination.totalCount`, khử trùng lặp bằng `payoutId`.
+   * **Schema thật của portal (payout_record) trên `paymentPayout`**: `accountType`, `eligibleTotalAmount`, `payoutCreatedTime`, `payoutId`, `totalPaymentAmount`, `payoutPaymentStatus`, `paidFailedReasonType`, `payArrivalTime`, `transferredToOffline`, `cancelReason`, `cancelType`, `closeReason` + `payoutInvoice`, `payoutExternalInfo{mergeInvoiceStatus, serviceFeeInvoiceStatus}` — **KHÔNG có** `totalServiceFee`, `taxTotalAmount`, `vatTotalAmount`, `whtTotalAmount`, `vatRate`, `whtRate` (các field cũ từng khiến GraphQL trả lỗi, extension rơi silent-fallback sang billing_list gây sai tháng 10).
    * **Bản chất**: Phản ánh chính xác **dòng tiền thực nhận về tài khoản ngân hàng** theo thời điểm chi trả (`payoutCreatedTime` / `payArrivalTime`).
    * **Thực tế tháng 10/2026 (5 kỳ thanh toán)**:
      * **Kỳ 01-10-2026** (Mã `...1001`): Thực nhận **23.331 đ** (Doanh thu các ngày cuối tháng 9 dưới ngưỡng khấu trừ, **chưa trừ thuế PIT và VAT -> Thuế = 0 đ**).

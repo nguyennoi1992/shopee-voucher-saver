@@ -14,6 +14,71 @@ Validates:
 import unittest
 import json
 import calendar
+import math
+
+
+# Port chính xác của decomposePayout() trong tax_report.js / popup.js (JS Math.round = floor(x+0.5))
+def js_round(x):
+    return math.floor(x + 0.5)
+
+
+def dec_scale(val):
+    num = float(val or 0)
+    return js_round(num / 100000) if abs(num) >= 100000 else num
+
+
+def decompose_payout(eligible, paid, m_key, mcn=0, fee_api=0, vat_api=0, pit_api=0):
+    gross = dec_scale(eligible)
+    paid_v = dec_scale(paid)
+    mcn_v = dec_scale(mcn)
+    fee_api_v = dec_scale(fee_api)
+    vat_api_v = dec_scale(vat_api)
+    pit_api_v = dec_scale(pit_api)
+
+    after_mcn = max(0, gross - mcn_v)
+    diff = max(0, after_mcn - paid_v)
+    is_oct = m_key >= "2026-10"
+
+    fee = vat = pit = wht10 = 0
+    if vat_api_v > 0 or pit_api_v > 0:
+        vat, pit = vat_api_v, pit_api_v
+        fee = fee_api_v if fee_api_v > 0 else max(0, diff - vat - pit)
+    elif fee_api_v > 0:
+        fee = fee_api_v
+        rem = max(0, diff - fee)
+        if is_oct:
+            vat = js_round(rem / 2)
+            pit = rem - vat
+        else:
+            wht10 = rem
+    elif diff == 0:
+        fee = 0
+    elif is_oct:
+        vat_est = js_round(gross * 0.05)
+        if diff > 2 * vat_est:
+            vat = pit = vat_est
+            fee = max(0, diff - 2 * vat_est)
+        else:
+            fee = diff
+    else:
+        fee = js_round(gross * 0.0098)
+        if diff <= js_round(gross * 0.0298):
+            fee = diff
+        else:
+            wht10 = max(0, diff - fee)
+
+    bill_total = max(0, after_mcn - fee)
+    net = paid_v if paid_v > 0 else max(0, bill_total - vat - pit - wht10)
+    return {"gross": gross, "mcn": mcn_v, "fee": fee, "vat": vat,
+            "pit": pit, "wht10": wht10, "bill": bill_total, "net": net}
+
+
+def epoch_gmt7(y, m, d, hour=12):
+    """Epoch của ngày d/m/y giờ hh:00 GMT+7 (mốc an toàn cho phân loại ngày/tháng)."""
+    import datetime
+    dt = datetime.datetime(y, m, d, hour, 0, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=7)))
+    return int(dt.timestamp())
+
 
 class TestTaxCalculator(unittest.TestCase):
     def setUp(self):
@@ -176,27 +241,9 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(daily_row["desc"], "Doanh thu từ Shopee")
         self.assertEqual(daily_row["amount"], 1000000.0)
 
-    def test_october_2026_tax_split(self):
-        # Từ tháng 10/2026: Tách riêng 5% VAT và 5% PIT, 10% vãng lai = 0, Phí DV 0.98% = 0
-        # Test Case 1: Image 1 Settlement (19-10-2026)
-        gross_img1 = 71086.0
-        mcn_img1 = 0.0
-        after_mcn_img1 = gross_img1 - mcn_img1
-        fee_dv_img1 = 0.0 # Bỏ phí 0.98%
-        bill_img1 = after_mcn_img1
-        vat_img1 = 3590.0 # Từ bill đối soát
-        pit_img1 = 3590.0 # Từ bill đối soát
-        net_tk_img1 = bill_img1 - vat_img1 - pit_img1
-        self.assertEqual(net_tk_img1, 63906.0) # Khớp 100% "Tổng thanh toán sau thuế: ₫63.906"
-
-        # Test Case 2: Image 2 Settlement (12-10-2026)
-        gross_img2 = 23489.0
-        vat_img2 = 1186.0
-        pit_img2 = 1186.0
-        net_tk_img2 = gross_img2 - vat_img2 - pit_img2
-        self.assertEqual(net_tk_img2, 21117.0) # Khớp 100% "Tổng thanh toán sau thuế: ₫21.117"
-
-        # Test Case 3: Image 3 Month 10 Aggregate (177.364 đ)
+    def test_october_fallback_branch_when_no_payout(self):
+        # Nhánh fallback (tháng chưa có kỳ chi trả Payout Record): chỉ dựa trên billing_list
+        # theo ngày hoàn thành đơn. Từ 10/2026: tách 5% VAT + 5% PIT trên afterMcn, 10% vãng lai = 0.
         gross_oct = 177364.0
         mcn_oct = 0.0
         after_mcn_oct = gross_oct - mcn_oct
@@ -212,7 +259,7 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(tax_vang_lai_oct, 0.0)
         self.assertEqual(net_tk_oct, 159628)
 
-        # 10 columns for October 2026
+        # 10 columns for October 2026 (fallback branch)
         oct_row = [
             "2026-10", gross_oct, mcn_oct, after_mcn_oct, fee_dv_oct,
             bill_oct, tax_vang_lai_oct, vat_oct, pit_oct, net_tk_oct
@@ -418,68 +465,118 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(total_gross, 6247413.0)
 
     def test_payout_record_october_real_data(self):
-        # Dữ liệu thực tế từ trang https://affiliate.shopee.vn/payment/payout_record
-        # Cung cấp bởi API getPaymentPayoutBillingList (GraphQL)
-        # Các khoản thanh toán trong tháng 10/2026:
-        # 1. 01/10/2026: 23.331 đ (chưa trừ thuế PIT + VAT vì thuộc doanh thu cuối tháng 9 dưới ngưỡng)
-        # 2. 05/10/2026: Doanh thu hợp lệ 37.854 đ, PIT: -1.912 đ, VAT: -1.912 đ, Sau thuế: 34.030 đ
-        # 3. 08/10/2026: Doanh thu hợp lệ 49.496 đ, PIT: -2.499 đ, VAT: -2.499 đ, Sau thuế: 44.498 đ
-        # 4. 12/10/2026: Doanh thu hợp lệ 23.489 đ, PIT: -1.186 đ, VAT: -1.186 đ, Sau thuế: 21.117 đ
-        # 5. 19/10/2026: Doanh thu hợp lệ 71.086 đ, PIT: -3.590 đ, VAT: -3.590 đ, Sau thuế: 63.906 đ
+        # Dữ liệu thực tế từ GraphQL getPaymentPayoutBillingList (payout_record):
+        # Real API chỉ trả 2 số: eligibleTotalAmount (Gross) + totalPaymentAmount (thực nhận),
+        # micro-unit x100.000. KHÔNG có totalServiceFee/vatTotalAmount/whtTotalAmount.
+        # Extension suy luận phân rã: diff ~10.98% => VAT=PIT=round(5% gross), fee = phần còn lại;
+        # diff ~0.98% => fee = diff, VAT = PIT = 0.
         payouts_october = [
-            {"pid": "17360010148261019", "eligible": "7179000000", "paid": "6390600000", "day": 19},
-            {"pid": "17360010148261012", "eligible": "2372100000", "paid": "2111700000", "day": 12},
-            {"pid": "17360010148261008", "eligible": "4998500000", "paid": "4449800000", "day": 8},
-            {"pid": "17360010148261005", "eligible": "3823000000", "paid": "3403000000", "day": 5},
-            {"pid": "17360010148261001", "eligible": "2356200000", "paid": "2333100000", "day": 1}
+            {"pid": "17360010148261019", "eligible": "7179000000", "paid": "6390600000",
+             "created": epoch_gmt7(2026, 10, 19)},
+            {"pid": "17360010148261012", "eligible": "2372100000", "paid": "2111700000",
+             "created": epoch_gmt7(2026, 10, 12)},
+            {"pid": "17360010148261008", "eligible": "4998500000", "paid": "4449800000",
+             "created": epoch_gmt7(2026, 10, 8)},
+            {"pid": "17360010148261005", "eligible": "3823000000", "paid": "3403000000",
+             "created": epoch_gmt7(2026, 10, 5)},
+            {"pid": "17360010148261001", "eligible": "2356200000", "paid": "2333100000",
+             "created": epoch_gmt7(2026, 10, 1)}
         ]
+
+        # Bảng chân lý đối soát từng kỳ (đối chiếu trực tiếp trang payout_record của user)
+        truth_table = {
+            "17360010148261001": (23562, 231, 23331, 0, 0, 23331),
+            "17360010148261005": (38230, 376, 37854, 1912, 1912, 34030),
+            "17360010148261008": (49985, 489, 49496, 2499, 2499, 44498),
+            "17360010148261012": (23721, 232, 23489, 1186, 1186, 21117),
+            "17360010148261019": (71790, 704, 71086, 3590, 3590, 63906)
+        }
+
+        total = {"gross": 0, "fee": 0, "bill": 0, "vat": 0, "pit": 0, "wht10": 0, "net": 0}
+        for p in payouts_october:
+            d = decompose_payout(p["eligible"], p["paid"], "2026-10")
+            exp = truth_table[p["pid"]]
+            self.assertEqual((d["gross"], d["fee"], d["bill"], d["vat"], d["pit"], d["net"]), exp,
+                             f"Sai phân rã kỳ {p['pid']}")
+            self.assertEqual(d["wht10"], 0)  # Từ 10/2026 10% vãng lai = 0
+
+            total["gross"] += d["gross"]
+            total["fee"] += d["fee"]
+            total["bill"] += d["bill"]
+            total["vat"] += d["vat"]
+            total["pit"] += d["pit"]
+            total["net"] += d["net"]
+
+        # Tổng tháng 10/2026 khớp chuẩn kế toán của user:
+        self.assertEqual(total["gross"], 207288)   # Tiền sàn trả
+        self.assertEqual(total["fee"], 2032)       # Phí DV 0,98% (có tồn tại thật!)
+        self.assertEqual(total["bill"], 205256)    # Doanh thu hợp lệ
+        self.assertEqual(total["vat"], 9187)       # 5% VAT (1.912 + 2.499 + 1.186 + 3.590)
+        self.assertEqual(total["pit"], 9187)       # 5% TNCN KD
+        self.assertEqual(total["wht10"], 0)        # 10% TNCN vãng lai = 0
+        self.assertEqual(total["net"], 186882)     # Thực nhận sau thuế
+        self.assertEqual(total["bill"], total["net"] + total["vat"] + total["pit"])
+
+    def test_payout_record_september_fee_only(self):
+        # Tháng 9/2026 (trước luật mới): các kỳ chi trả chỉ trừ phí DV 0.98% (hoặc trừ hụt)
+        # không có VAT/PIT 5%, không 10% vãng lai. Diff ~ 0.98% x Gross.
+        payouts_september = [
+            {"eligible": "2778400000", "paid": "2751200000", "created": epoch_gmt7(2026, 9, 4)},
+            {"eligible": "2160900000", "paid": "2139700000", "created": epoch_gmt7(2026, 9, 10)},
+            {"eligible": "2803800000", "paid": "2776400000", "created": epoch_gmt7(2026, 9, 15)},
+            {"eligible": "16451800000", "paid": "16290500000", "created": epoch_gmt7(2026, 9, 21)},
+            {"eligible": "10562300000", "paid": "10458900000", "created": epoch_gmt7(2026, 9, 27)}
+        ]
+
+        expected = [272, 212, 274, 1613, 1034]
 
         total_gross = 0
         total_fee = 0
-        total_bill = 0
-        total_vat = 0
-        total_pit = 0
         total_net = 0
+        total_tax = 0
+        for p, exp_fee in zip(payouts_september, expected):
+            d = decompose_payout(p["eligible"], p["paid"], "2026-09")
+            self.assertEqual(d["fee"], exp_fee)
+            self.assertEqual(d["vat"], 0)
+            self.assertEqual(d["pit"], 0)
+            self.assertEqual(d["wht10"], 0)
+            self.assertEqual(d["bill"], d["gross"] - d["fee"])
+            self.assertEqual(d["net"], round(float(p["paid"]) / 100000))
 
-        for p in payouts_october:
-            gross = round(float(p["eligible"]) / 100000)
-            paid = round(float(p["paid"]) / 100000)
+            total_gross += d["gross"]
+            total_fee += d["fee"]
+            total_net += d["net"]
+            total_tax += d["vat"] + d["pit"] + d["wht10"]
 
-            if p["day"] == 1:
-                # Kỳ 01/10/2026: Chưa trừ thuế PIT + VAT
-                vat = 0
-                pit = 0
-                fee = gross - paid # 23.562 - 23.331 = 231 đ
-                bill = gross - fee # 23.331 đ
-                net = paid         # 23.331 đ
-            else:
-                # Shopee tính 5% VAT và 5% PIT trên Doanh thu hợp lệ cơ sở
-                vat = round(gross * 0.05)
-                pit = round(gross * 0.05)
-                fee = max(0, gross - paid - vat - pit)
-                bill = gross - fee
-                net = paid
+        self.assertEqual(total_gross, 347572)
+        self.assertEqual(total_fee, 3405)
+        self.assertEqual(total_tax, 0)
+        self.assertEqual(total_net, 344167)
+        self.assertEqual(total_net + total_fee, total_gross)
 
-            total_gross += gross
-            total_fee += fee
-            total_bill += bill
-            total_vat += vat
-            total_pit += pit
-            total_net += net
+    def test_october_graphql_contract_real_fields_only(self):
+        # Đảm bảo request/response GraphQL dùng schema THẬT của portal:
+        # payoutList.paymentPayout chỉ chứa 2 số tiền - các field cũ
+        # (taxTotalAmount, vatTotalAmount, whtTotalAmount, vatRate, whtRate)
+        # không tồn tại trong schema khiến GQL bị lỗi trước đây.
+        with open("tax_report.js", encoding="utf-8") as f:
+            js = f.read()
+        self.assertNotIn("taxTotalAmount", js)
+        self.assertNotIn("vatRate\n", js)
+        self.assertNotIn("whtRate\n", js)
+        self.assertNotIn('"taxTotalAmount"', js)
+        self.assertIn('"/api/v3/gql?q=getPayoutList"', js)
+        self.assertIn('"Affiliate-Program-Type"', js)
+        self.assertIn('"CSRF-token"', js)
+        # Phân trang theo totalCount (portal chỉ trả ~10 kỳ/trang)
+        self.assertIn("pageNum: pageNum", js)
+        self.assertIn("totalCount", js)
 
-        # Kiểm tra chính xác theo yêu cầu người dùng:
-        # 1. Sau thuế = 23.331 + 34.030 + 44.498 + 21.117 + 63.906 = 186.882 đ
-        self.assertEqual(total_net, 186882)
-        # 2. Tổng PIT = 1.912 + 2.499 + 1.186 + 3.590 = 9.187 đ
-        self.assertEqual(total_pit, 9187)
-        # 3. Tổng VAT = 1.912 + 2.499 + 1.186 + 3.590 = 9.187 đ
-        self.assertEqual(total_vat, 9187)
-        # 4. Kỳ 01/10/2026 chưa trừ thuế PIT và VAT
-        self.assertEqual(payouts_october[4]["day"], 1)
-        # 5. Doanh thu hợp lệ sau phí = 205.256 đ
-        self.assertEqual(total_bill, 205256)
-        # 6. Trước thuế (hợp lệ sau phí) = 186.882 + 9.187 (PIT) + 9.187 (VAT) = 205.256 đ
-        self.assertEqual(total_net + total_pit + total_vat, 205256)
+        with open("affiliate_content.js", encoding="utf-8") as f:
+            js2 = f.read()
+        self.assertNotIn("taxTotalAmount", js2)
+        # Đã bỏ cào DOM (el eligible = net gán sai nghĩa => sai phân rã)
+        self.assertNotIn("querySelectorAll", js2)
 
     def test_october_2026_user_validation_oracle(self):
         # Bảng chân lý đối soát chính xác theo yêu cầu người dùng (Từng dòng và Tổng cộng):

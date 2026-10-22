@@ -65,6 +65,7 @@ shopee-voucher-saver/
 * Nhấp vào nút nổi **“📊 Sổ tay thuế & Xuất Excel Shopee”** ở góc dưới bên phải màn hình (hoặc mở từ popup extension, chuyển sang tab **Sổ tay thuế**).
 * Chọn khoảng thời gian **Từ tháng** - **Đến tháng** (mặc định các tháng trong năm 2026).
 * Xem bảng Sổ tay thuế đối soát các khoản: HH gộp, Phí MCN, Sau MCN, Phí DV 0.98%, Thực nhận, Thuế vãng lai 10%, Thuế HKD (5% GTGT + 5% TNCN), Ước thực về TK.
+* **Chuẩn đối soát từng bill từ 10/2026**: Tháng có kỳ chi trả tổng hợp theo **Payout Record** (GraphQL `getPaymentPayoutBillingList`, tự lặp đủ trang, phân rã từ `Gross` và `Thực nhận` => Phí DV 0,98% / 5% VAT / 5% PIT) — khớp 100% bảng đối soát tháng 10/2026 (5 kỳ, thực nhận 186.882 đ). Tháng chưa có kỳ chi trả fallback theo ngày hoàn thành đơn.
 * **Cơ chế Cache 24h thông minh**: Dữ liệu thanh toán của các kỳ đã hoàn thành là cố định nên được lưu cache cục bộ (`chrome.storage.local`). Extension chỉ gọi API khi chưa có dữ liệu, khi cache quá 24h hoặc khi người dùng chủ động bấm **“Làm mới từ Shopee”**, giúp mở báo cáo tức thì và tránh quá tải API.
 * Bấm **“📊 Xuất Excel”** hoặc **“📥 Xuất CSV”** để tải bảng kê doanh thu theo ngày (*"Doanh thu là tính tiền sàn trả chưa trừ phí"*).
 

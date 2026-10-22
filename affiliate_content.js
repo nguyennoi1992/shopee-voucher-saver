@@ -82,9 +82,9 @@
         }
       }
 
-      // Lấy CSRF token từ cookies hoặc localStorage
+      // Lấy CSRF token từ cookies hoặc localStorage (trang dùng header CSRF-token)
       const getCsrfToken = () => {
-        const match = document.cookie.match(/(?:^|;\s*)(?:SPC_CSRF|csrf_token)=([^;]+)/);
+        const match = document.cookie.match(/(?:^|;\s*)(?:csrftoken|SPC_CSRF|csrf_token)=([^;]+)/);
         if (match) return decodeURIComponent(match[1]);
         try {
           return localStorage.getItem("csrf_token") || localStorage.getItem("SPC_CSRF") || "";
@@ -104,119 +104,97 @@
         headers["x-csrftoken"] = csrf;
       }
 
-      // 1. Thử gọi API getPaymentPayoutBillingList (GraphQL) từ trang payout_record
-      try {
-        const gqlRes = await fetch("/api/v3/gql?q=getPayoutList", {
-          method: "POST",
-          headers: headers,
-          body: JSON.stringify({
-            operationName: "getPaymentPayoutBillingList",
-            query: `
-              query getPaymentPayoutBillingList($pageSize: Int, $pageNum: Int) {
-                getPaymentPayoutBillingList(pageSize: $pageSize, pageNum: $pageNum) {
-                  payoutList {
-                    payoutDisplayVersion
-                    paymentPayout {
-                      accountType
-                      eligibleTotalAmount
-                      payoutCreatedTime
-                      payoutId
-                      totalPaymentAmount
-                      payoutPaymentStatus
-                      paidFailedReasonType
-                      payArrivalTime
-                      transferredToOffline
-                      cancelReason
-                      cancelType
-                      closeReason
-                      totalServiceFee
-                      taxTotalAmount
-                      vatTotalAmount
-                      whtTotalAmount
-                      vatRate
-                      whtRate
-                    }
-                    payoutInvoice
-                    payoutExternalInfo {
-                      mergeInvoiceStatus
-                      serviceFeeInvoiceStatus
-                    }
-                  }
-                  payoutTotalAmount
-                  payoutBreakdown
-                  pagination {
-                    pageNum
-                    pageSize
-                    totalCount
-                  }
-                }
+      // Schema chính xác của GraphQL Shopee Affiliate (từ payout_record của portal):
+      // mỗi kỳ chỉ có eligibleTotalAmount (Gross) + totalPaymentAmount (thực nhận), micro-unit (x100.000).
+      const PAYOUT_QUERY = `
+        query getPaymentPayoutBillingList($pageSize: Int, $pageNum: Int) {
+          getPaymentPayoutBillingList(pageSize: $pageSize, pageNum: $pageNum) {
+            payoutList {
+              payoutDisplayVersion
+              paymentPayout {
+                accountType
+                eligibleTotalAmount
+                payoutCreatedTime
+                payoutId
+                totalPaymentAmount
+                payoutPaymentStatus
+                paidFailedReasonType
+                payArrivalTime
+                transferredToOffline
+                cancelReason
+                cancelType
+                closeReason
               }
-            `,
-            variables: { pageSize: 100, pageNum: 1 }
-          })
-        });
-        const gqlJson = await gqlRes.json();
-        const pList = gqlJson.data?.getPaymentPayoutBillingList?.payoutList;
-        if (Array.isArray(pList) && pList.length > 0) {
-          chrome.storage.local.set({
-            [STORAGE_KEY]: {
-              updatedAt: Date.now(),
-              list: pList
+              payoutInvoice
+              payoutExternalInfo {
+                mergeInvoiceStatus
+                serviceFeeInvoiceStatus
+              }
             }
+            payoutTotalAmount
+            pagination {
+              pageNum
+              pageSize
+              totalCount
+            }
+          }
+        }`;
+
+      const payouts = [];
+      const seenPayoutIds = new Set();
+      // 1. GraphQL getPaymentPayoutBillingList - lặp đủ trang theo totalCount
+      try {
+        const PAGE_LIMIT = 20;
+        let totalCount = 0;
+        for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
+          const gqlRes = await fetch("/api/v3/gql?q=getPayoutList", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+              operationName: "getPaymentPayoutBillingList",
+              query: PAYOUT_QUERY,
+              variables: { pageSize: 100, pageNum: pageNum }
+            })
           });
-          return;
+          const gqlJson = await gqlRes.json();
+          const node = gqlJson?.data?.getPaymentPayoutBillingList;
+          if (!node) break;
+          const pList = Array.isArray(node.payoutList) ? node.payoutList : [];
+          let newItems = 0;
+          for (const it of pList) {
+            const pid = it?.paymentPayout?.payoutId || it?.payoutId;
+            if (!pid || seenPayoutIds.has(pid)) continue;
+            seenPayoutIds.add(pid);
+            payouts.push(it);
+            newItems++;
+          }
+          const total = parseInt(node.pagination?.totalCount || 0, 10) || 0;
+          if (total > 0) totalCount = total;
+          if (newItems === 0) break;
+          if (totalCount > 0 && payouts.length >= totalCount) break;
+          if (pList.length === 0) break;
         }
       } catch (_) {}
 
-      // 2. Thử cào DOM nếu đang ở trang payout_record
-      try {
-        if (window.location.href.includes("payout_record")) {
-          const domItems = [];
-          const rows = document.querySelectorAll("tbody tr");
-          for (const tr of rows) {
-            const text = tr.innerText || "";
-            const dateMatch = text.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
-            const idMatch = text.match(/\b(17\d{14,17})\b/);
-            const amtMatch = text.match(/₫?\s*([\d.,]+)/);
-            if (dateMatch && idMatch && amtMatch) {
-              const [_, d, m, y] = dateMatch;
-              const epoch = Math.floor(new Date(`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}T12:00:00+07:00`).getTime() / 1000);
-              const net = parseFloat(amtMatch[1].replace(/\./g, "").replace(/,/g, "."));
-              domItems.push({
-                payoutDisplayVersion: 0,
-                paymentPayout: {
-                  payoutId: idMatch[1],
-                  payoutCreatedTime: epoch.toString(),
-                  totalPaymentAmount: (net * 100000).toString(),
-                  eligibleTotalAmount: (net * 100000).toString()
-                }
-              });
-            }
-          }
-          if (domItems.length > 0) {
-            chrome.storage.local.set({
-              [STORAGE_KEY]: {
-                updatedAt: Date.now(),
-                list: domItems
-              }
-            });
-            return;
-          }
-        }
-      } catch (_) {}
-
-      // 3. Fallback sang billing_list nếu không gọi được GraphQL
+      // 2. Billing List theo ngày hoàn thành đơn (kê khai + các tháng không có payout)
       const currentYear = new Date().getFullYear();
       const s = Math.floor(new Date(`${currentYear}-01-01T00:00:00+07:00`).getTime() / 1000);
       const e = Math.floor(new Date(`${currentYear}-12-31T23:59:59+07:00`).getTime() / 1000);
-      const url = `/api/v3/payment/billing_list?order_completed_start_time=${s}&order_completed_end_time=${e}`;
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json.code === 0 && Array.isArray(json.data?.list)) {
+      let billingList = [];
+      try {
+        const url = `/api/v3/payment/billing_list?order_completed_start_time=${s}&order_completed_end_time=${e}`;
+        const res = await fetch(url);
+        const json = await res.json();
+        if (json.code === 0 && Array.isArray(json.data?.list)) {
+          billingList = json.data.list;
+        }
+      } catch (_) {}
+
+      if (payouts.length > 0 || billingList.length > 0) {
         chrome.storage.local.set({
           [STORAGE_KEY]: {
             updatedAt: Date.now(),
-            list: json.data.list
+            list: [...payouts, ...billingList]
           }
         });
       }
