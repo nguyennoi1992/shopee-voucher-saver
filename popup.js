@@ -322,7 +322,8 @@ async function stopBackgroundScan() {
   setReportStatus("Dang dung phan tich...");
 }
 
-const AFFILIATE_CACHE_KEY = "shopee_affiliate_billing_cache_v1";
+const AFFILIATE_CACHE_KEY_V2 = "shopee_affiliate_billing_cache_v2";
+const AFFILIATE_CACHE_KEY_V1 = "shopee_affiliate_billing_cache_v1";
 let cachedAffiliateList = [];
 
 function setAffiliateStatus(msg, type = "") {
@@ -331,16 +332,29 @@ function setAffiliateStatus(msg, type = "") {
 }
 
 async function loadAffiliateSummary() {
-  const data = await new Promise(resolve => {
+  const cached = await new Promise(resolve => {
     if (chrome?.storage?.local) {
-      chrome.storage.local.get([AFFILIATE_CACHE_KEY], res => resolve(res?.[AFFILIATE_CACHE_KEY] || []));
+      chrome.storage.local.get([AFFILIATE_CACHE_KEY_V2, AFFILIATE_CACHE_KEY_V1], res => {
+        if (res?.[AFFILIATE_CACHE_KEY_V2]?.list) {
+          resolve(res[AFFILIATE_CACHE_KEY_V2]);
+        } else if (res?.[AFFILIATE_CACHE_KEY_V1]) {
+          resolve({ updatedAt: Date.now(), list: res[AFFILIATE_CACHE_KEY_V1] });
+        } else {
+          resolve(null);
+        }
+      });
     } else {
-      const loc = localStorage.getItem(AFFILIATE_CACHE_KEY);
-      resolve(loc ? JSON.parse(loc) : []);
+      const v2 = localStorage.getItem(AFFILIATE_CACHE_KEY_V2);
+      if (v2) {
+        resolve(JSON.parse(v2));
+      } else {
+        const v1 = localStorage.getItem(AFFILIATE_CACHE_KEY_V1);
+        resolve(v1 ? { updatedAt: Date.now(), list: JSON.parse(v1) } : null);
+      }
     }
   });
 
-  cachedAffiliateList = Array.isArray(data) ? data : [];
+  cachedAffiliateList = Array.isArray(cached?.list) ? cached.list : [];
   if (cachedAffiliateList.length === 0) {
     setAffiliateStatus("Chưa có dữ liệu cache. Hãy bấm 'Đồng bộ dữ liệu' từ tab Affiliate hoặc mở Sổ tay thuế.");
     return;
@@ -380,7 +394,8 @@ async function loadAffiliateSummary() {
   }
 
   updateAffiliateSummaryMetrics();
-  setAffiliateStatus(`Đã nạp ${cachedAffiliateList.length} bản ghi affiliate từ cache.`, "success");
+  const dateStr = cached?.updatedAt ? new Date(cached.updatedAt).toLocaleTimeString("vi-VN") : "";
+  setAffiliateStatus(`Dữ liệu nạp từ Cache (${cachedAffiliateList.length} bản ghi)${dateStr ? ` - Lưu lúc ${dateStr}` : ""}.`, "success");
 }
 
 function updateAffiliateSummaryMetrics() {
@@ -456,7 +471,12 @@ async function fetchAffiliateLive() {
     if (res?.code === 0 && Array.isArray(res.data?.list)) {
       cachedAffiliateList = res.data.list;
       if (chrome?.storage?.local) {
-        chrome.storage.local.set({ [AFFILIATE_CACHE_KEY]: cachedAffiliateList });
+        chrome.storage.local.set({
+          [AFFILIATE_CACHE_KEY_V2]: {
+            updatedAt: Date.now(),
+            list: cachedAffiliateList
+          }
+        });
       }
       loadAffiliateSummary();
       setAffiliateStatus(`Đã đồng bộ ${cachedAffiliateList.length} bản ghi thành công!`, "success");

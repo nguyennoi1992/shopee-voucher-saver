@@ -10,6 +10,14 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
   * Tích hợp trực tiếp trên trang thanh toán `https://affiliate.shopee.vn/payment/payout_record` và `/payment/billing`.
   * Hiển thị nút bấm tiện ích nổi (Floating Pill) ngay góc màn hình: *“📊 Sổ tay thuế & Xuất Excel Shopee”*.
   * Tự động gọi API nội bộ `/api/v3/payment/billing_list` với phiên đăng nhập hiện tại để lấy dữ liệu doanh thu chính xác nhất.
+* **Cơ chế Cache thông minh 24h (Tối ưu API)**:
+  * Dữ liệu đối soát các tháng đã hoàn thành là cố định (bất biến), vì vậy extension tự động lưu vào bộ nhớ đệm `chrome.storage.local`.
+  * **Chỉ gọi API khi**:
+    1. Lần đầu tiên truy cập (chưa có cache).
+    2. Dữ liệu trong cache đã hết hạn (quá 24 giờ).
+    3. Người dùng chủ động yêu cầu làm mới bằng cách bấm nút **“🔄 Làm mới từ Shopee”**.
+  * Giúp mở trang báo cáo tức thì, không làm quá tải endpoint của Shopee và không lo bị rate limit.
+  * Cung cấp nút **“🗑️ Xóa cache”** để dọn dẹp bộ nhớ đệm bất cứ lúc nào.
 * **Lọc theo khoảng thời gian tùy chọn**:
   * Cho phép chọn **Từ tháng** (ví dụ `2026-01`) đến **Đến tháng** (ví dụ `2026-10`).
   * Tự động cập nhật bảng tổng hợp và bảng chi tiết theo ngày theo phạm vi đã chọn.

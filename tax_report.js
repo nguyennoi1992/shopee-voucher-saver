@@ -5,7 +5,9 @@
 (function () {
   "use strict";
 
-  const STORAGE_KEY = "shopee_affiliate_billing_cache_v1";
+  const STORAGE_KEY = "shopee_affiliate_billing_cache_v2";
+  const STORAGE_KEY_V1 = "shopee_affiliate_billing_cache_v1";
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
   const SERVICE_FEE_RATE = 0.0098; // 0.98%
 
   let rawBillingList = [];
@@ -16,6 +18,7 @@
   const toMonthSelect = document.getElementById("select-to-month");
   const taxModeSelect = document.getElementById("select-tax-mode");
   const fetchLiveBtn = document.getElementById("btn-fetch-live");
+  const clearCacheBtn = document.getElementById("btn-clear-cache");
   const pasteModalBtn = document.getElementById("btn-paste-modal");
   const exportExcelBtn = document.getElementById("btn-export-excel");
   const exportCsvBtn = document.getElementById("btn-export-csv");
@@ -112,26 +115,64 @@
   async function loadCache() {
     return new Promise(resolve => {
       if (chrome?.storage?.local) {
-        chrome.storage.local.get([STORAGE_KEY], res => {
-          resolve(res?.[STORAGE_KEY] || null);
+        chrome.storage.local.get([STORAGE_KEY, STORAGE_KEY_V1], res => {
+          if (res?.[STORAGE_KEY]) {
+            resolve(res[STORAGE_KEY]);
+          } else if (res?.[STORAGE_KEY_V1]) {
+            resolve({ updatedAt: Date.now(), list: res[STORAGE_KEY_V1] });
+          } else {
+            resolve(null);
+          }
         });
       } else {
         const local = localStorage.getItem(STORAGE_KEY);
-        resolve(local ? JSON.parse(local) : null);
+        if (local) {
+          resolve(JSON.parse(local));
+        } else {
+          const v1 = localStorage.getItem(STORAGE_KEY_V1);
+          resolve(v1 ? { updatedAt: Date.now(), list: JSON.parse(v1) } : null);
+        }
       }
     });
   }
 
-  async function saveCache(data) {
+  async function saveCache(list) {
+    const payload = {
+      updatedAt: Date.now(),
+      list: list
+    };
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ [STORAGE_KEY]: data });
+      chrome.storage.local.set({ [STORAGE_KEY]: payload });
     } else {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     }
   }
 
+  async function clearCacheData() {
+    rawBillingList = [];
+    if (chrome?.storage?.local) {
+      chrome.storage.local.remove([STORAGE_KEY, STORAGE_KEY_V1]);
+    }
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY_V1);
+    initDataAndRender();
+    showStatus("Đã xóa bộ nhớ đệm cache. Bấm 'Làm mới từ Shopee' để đồng bộ lại.", "normal");
+  }
+
   // Live Fetch from Shopee Affiliate Tab
-  async function fetchLiveFromTab() {
+  async function fetchLiveFromTab(force = true) {
+    if (!force) {
+      const cached = await loadCache();
+      if (cached && cached.updatedAt && (Date.now() - cached.updatedAt < CACHE_TTL_MS) && Array.isArray(cached.list) && cached.list.length > 0) {
+        rawBillingList = cached.list;
+        initDataAndRender();
+        const updatedDate = new Date(cached.updatedAt);
+        const remainingHours = Math.max(0, Math.round((CACHE_TTL_MS - (Date.now() - cached.updatedAt)) / 3600000));
+        showStatus(`Dữ liệu nạp từ Cache (${rawBillingList.length} bản ghi). Lưu lúc ${updatedDate.toLocaleTimeString("vi-VN")} - Hết hạn sau ~${remainingHours}h.`, "success", "Không cần gọi API.");
+        return;
+      }
+    }
+
     showStatus("Đang tìm tab Shopee Affiliate để gọi API...");
     if (!chrome?.tabs?.query) {
       showStatus("Trình duyệt không hỗ trợ chrome.tabs API hoặc đang chạy offline.", "error");
@@ -192,7 +233,8 @@
         rawBillingList = response.data.list;
         await saveCache(rawBillingList);
         initDataAndRender();
-        showStatus(`Đã tải thành công ${rawBillingList.length} bản ghi doanh thu từ Shopee Affiliate!`, "success", `Cập nhật lúc ${new Date().toLocaleTimeString("vi-VN")}`);
+        const now = new Date();
+        showStatus(`Đã làm mới thành công ${rawBillingList.length} bản ghi và lưu Cache (24h).`, "success", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN")}`);
       } else {
         showStatus("Shopee trả về lỗi hoặc chưa đăng nhập: " + (response.msg || JSON.stringify(response)), "error");
       }
@@ -201,7 +243,8 @@
     }
   }
 
-  fetchLiveBtn.addEventListener("click", fetchLiveFromTab);
+  fetchLiveBtn.addEventListener("click", () => fetchLiveFromTab(true));
+  clearCacheBtn.addEventListener("click", clearCacheData);
 
   // Data processing
   function processData() {
@@ -688,15 +731,30 @@
   // Load from cache or trigger live check
   (async function main() {
     const cached = await loadCache();
-    if (cached && Array.isArray(cached) && cached.length > 0) {
-      rawBillingList = cached;
+    const isFresh = cached && cached.updatedAt && (Date.now() - cached.updatedAt < CACHE_TTL_MS) && Array.isArray(cached.list) && cached.list.length > 0;
+
+    if (isFresh) {
+      // Dữ liệu còn hạn trong Cache -> Ưu tiên dùng ngay, KHÔNG gọi API
+      rawBillingList = cached.list;
       initDataAndRender();
-      showStatus(`Đã tải ${cached.length} bản ghi từ bộ nhớ đệm (Cache).`, "success");
+      const updatedDate = new Date(cached.updatedAt);
+      const remainingHours = Math.max(0, Math.round((CACHE_TTL_MS - (Date.now() - cached.updatedAt)) / 3600000));
+      showStatus(
+        `Dữ liệu nạp từ Cache (${rawBillingList.length} bản ghi). Lưu lúc ${updatedDate.toLocaleTimeString("vi-VN")} ${updatedDate.toLocaleDateString("vi-VN")}. Hết hạn sau ~${remainingHours}h.`,
+        "success",
+        "Đã dùng cache (không gọi API). Bấm 'Làm mới từ Shopee' nếu cần tải mới."
+      );
+    } else if (cached?.list && Array.isArray(cached.list) && cached.list.length > 0) {
+      // Cache đã quá hạn 24h -> nạp tạm cache để hiển thị ngay, rồi mới tự động refresh ngầm
+      rawBillingList = cached.list;
+      initDataAndRender();
+      showStatus("Dữ liệu cache đã hết hạn (>24h). Đang kết nối tới Shopee Affiliate để cập nhật...", "normal");
+      fetchLiveFromTab(false);
     } else {
+      // Chưa có cache -> mới cần gọi API
       initDataAndRender();
-      showStatus("Chưa có dữ liệu cache. Hãy bấm 'Tải từ Shopee' để đồng bộ dữ liệu.");
-      // Attempt auto-fetch if affiliate tab is available
-      fetchLiveFromTab();
+      showStatus("Chưa có dữ liệu trong cache. Đang tìm tab Shopee Affiliate để tải lần đầu...");
+      fetchLiveFromTab(false);
     }
   })();
 })();

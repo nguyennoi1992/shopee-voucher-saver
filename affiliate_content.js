@@ -2,6 +2,7 @@
  * affiliate_content.js - Content script for Shopee Affiliate Payment & Payout pages
  * Automatically displays a floating action button on affiliate.shopee.vn/payment/payout_record
  * allowing one-click access to Sổ tay thuế 2026 & Revenue Excel Export.
+ * Caches data with 24-hour TTL to prevent redundant API queries.
  */
 
 (function () {
@@ -10,6 +11,9 @@
   // Prevent multiple injections
   if (window.__shopeeAffiliateTaxInjected) return;
   window.__shopeeAffiliateTaxInjected = true;
+
+  const STORAGE_KEY = "shopee_affiliate_billing_cache_v2";
+  const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   function createFloatingButton() {
     const existing = document.getElementById("shopee-affiliate-tax-pill");
@@ -62,9 +66,22 @@
     document.body.appendChild(pill);
   }
 
-  // Auto cache billing list in background if on payout or billing page
-  async function syncBillingData() {
+  // Only sync if cache is missing, expired, or explicitly requested
+  async function syncBillingData(force = false) {
     try {
+      if (!chrome?.storage?.local) return;
+
+      if (!force) {
+        const cached = await new Promise(resolve => {
+          chrome.storage.local.get([STORAGE_KEY], res => resolve(res?.[STORAGE_KEY] || null));
+        });
+
+        // If cache exists and is within TTL, skip API call completely
+        if (cached && cached.updatedAt && (Date.now() - cached.updatedAt < CACHE_TTL_MS) && Array.isArray(cached.list) && cached.list.length > 0) {
+          return;
+        }
+      }
+
       const currentYear = new Date().getFullYear();
       const s = Math.floor(new Date(`${currentYear}-01-01T00:00:00+07:00`).getTime() / 1000);
       const e = Math.floor(new Date(`${currentYear}-12-31T23:59:59+07:00`).getTime() / 1000);
@@ -72,7 +89,12 @@
       const res = await fetch(url);
       const json = await res.json();
       if (json.code === 0 && Array.isArray(json.data?.list)) {
-        chrome.storage.local.set({ "shopee_affiliate_billing_cache_v1": json.data.list });
+        chrome.storage.local.set({
+          [STORAGE_KEY]: {
+            updatedAt: Date.now(),
+            list: json.data.list
+          }
+        });
       }
     } catch (_) {
       // Ignore background fetch errors

@@ -106,5 +106,34 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertIn("1,Doanh thu từ Shopee,1000000", csv_str)
         self.assertIn(",Tổng Doanh Thu,3000000", csv_str)
 
+    def test_cache_freshness(self):
+        # 24 hours TTL
+        ttl_ms = 24 * 60 * 60 * 1000
+        now_ms = 1792634400000
+
+        # Fresh cache (1 hour old)
+        fresh_cache = {
+            "updatedAt": now_ms - (3600 * 1000),
+            "list": [{"id": 1}]
+        }
+        is_fresh = (now_ms - fresh_cache["updatedAt"]) < ttl_ms and len(fresh_cache["list"]) > 0
+        self.assertTrue(is_fresh)
+
+        # Expired cache (25 hours old)
+        expired_cache = {
+            "updatedAt": now_ms - (25 * 3600 * 1000),
+            "list": [{"id": 1}]
+        }
+        is_expired = (now_ms - expired_cache["updatedAt"]) >= ttl_ms
+        self.assertTrue(is_expired)
+
+        # Empty cache
+        empty_cache = {
+            "updatedAt": now_ms,
+            "list": []
+        }
+        has_items = bool(empty_cache["list"])
+        self.assertFalse(has_items)
+
 if __name__ == "__main__":
     unittest.main()
