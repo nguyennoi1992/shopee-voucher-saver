@@ -82,27 +82,56 @@
         }
       }
 
-      // Lấy CSRF token từ cookies hoặc localStorage (trang dùng header CSRF-token)
-      const getCsrfToken = () => {
-        const match = document.cookie.match(/(?:^|;\s*)(?:csrftoken|SPC_CSRF|csrf_token)=([^;]+)/);
-        if (match) return decodeURIComponent(match[1]);
-        try {
-          return localStorage.getItem("csrf_token") || localStorage.getItem("SPC_CSRF") || "";
-        } catch (_) {
-          return "";
-        }
-      };
-
-      const csrf = getCsrfToken();
+      // Header cơ bản: portal gọi gql thành công với POST KHÔNG cần CSRF-token.
+      // Chỉ thêm CSRF-token khi gặp 403/401, tìm token theo cơ chế portal:
+      // 1) localStorage ConfigClient, 2) GET /api/v3/config/website, 3) cookie csrftoken.
       const headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
         "Affiliate-Program-Type": "1"
       };
-      if (csrf) {
-        headers["CSRF-token"] = csrf;
-        headers["x-csrftoken"] = csrf;
-      }
+
+      const findCsrfInObject = (obj) => {
+        const stack = [obj];
+        if (obj && typeof obj === "object") {
+          while (stack.length) {
+            const cur = stack.pop();
+            if (!cur || typeof cur !== "object") continue;
+            for (const key of Object.keys(cur)) {
+              if (key === "csrf_token" && typeof cur[key] === "string" && cur[key]) return cur[key];
+              if (cur[key] && typeof cur[key] === "object") stack.push(cur[key]);
+            }
+          }
+        }
+        return null;
+      };
+
+      const discoverCsrfToken = async () => {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            const v = localStorage.getItem(k);
+            if (v && v.indexOf("csrf_token") !== -1) {
+              try {
+                const found = findCsrfInObject(JSON.parse(v));
+                if (found) return found;
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+        try {
+          const res = await fetch("/api/v3/config/website", { headers: { "Accept": "application/json" } });
+          const fresh = res.headers && res.headers.get ? res.headers.get("csrf-token") : null;
+          if (fresh) return fresh;
+          try {
+            const found = findCsrfInObject(JSON.parse(await res.text()));
+            if (found) return found;
+          } catch (_) {}
+        } catch (_) {}
+        const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        if (m) return decodeURIComponent(m[1]);
+        return null;
+      };
 
       // Schema chính xác của GraphQL Shopee Affiliate (từ payout_record của portal):
       // mỗi kỳ chỉ có eligibleTotalAmount (Gross) + totalPaymentAmount (thực nhận), micro-unit (x100.000).
@@ -142,22 +171,48 @@
 
       const payouts = [];
       const seenPayoutIds = new Set();
-      // 1. GraphQL getPaymentPayoutBillingList - lặp đủ trang theo totalCount
+      let csrfToken = null;
+      let tokenLookupDone = false;
+      // 1. GraphQL getPaymentPayoutBillingList - lặp đủ trang theo totalCount.
+      // Chiến lược: POST không CSRF trước (chuẩn portal), chỉ thêm CSRF-token khi 403/401.
       try {
         const PAGE_LIMIT = 20;
         let totalCount = 0;
         for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
-          const gqlRes = await fetch("/api/v3/gql?q=getPayoutList", {
-            method: "POST",
-            headers: headers,
-            body: JSON.stringify({
-              operationName: "getPaymentPayoutBillingList",
-              query: PAYOUT_QUERY,
-              variables: { pageSize: 100, pageNum: pageNum }
-            })
-          });
-          const gqlJson = await gqlRes.json();
-          const node = gqlJson?.data?.getPaymentPayoutBillingList;
+          const callGql = async (withCsrf) => {
+            const hdrs = Object.assign({}, headers);
+            if (withCsrf && csrfToken) hdrs["CSRF-token"] = csrfToken;
+            const res = await fetch("/api/v3/gql?q=getPayoutList", {
+              method: "POST",
+              headers: hdrs,
+              body: JSON.stringify({
+                operationName: "getPaymentPayoutBillingList",
+                query: PAYOUT_QUERY,
+                variables: { pageSize: 100, pageNum: pageNum }
+              })
+            });
+            const fresh = res.headers && res.headers.get ? res.headers.get("csrf-token") : null;
+            if (fresh) csrfToken = fresh; // portal rotate token qua response header
+            let json = null;
+            try {
+              json = await res.json();
+            } catch (_) {}
+            return { status: res.status, json: json };
+          };
+
+          let r = await callGql(false);
+          let node = r.json?.data?.getPaymentPayoutBillingList;
+          if (!node && (r.status === 403 || r.status === 401)) {
+            // CSRF-token cookie sai/đổi => tìm token chuẩn rồi thử lại với header
+            if (!tokenLookupDone) {
+              tokenLookupDone = true;
+              csrfToken = csrfToken || (await discoverCsrfToken());
+            }
+            if (csrfToken) {
+              r = await callGql(true);
+              node = r.json?.data?.getPaymentPayoutBillingList;
+            }
+          }
           if (!node) break;
           const pList = Array.isArray(node.payoutList) ? node.payoutList : [];
           let newItems = 0;

@@ -567,16 +567,27 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertNotIn('"taxTotalAmount"', js)
         self.assertIn('"/api/v3/gql?q=getPayoutList"', js)
         self.assertIn('"Affiliate-Program-Type"', js)
-        self.assertIn('"CSRF-token"', js)
         # Phân trang theo totalCount (portal chỉ trả ~10 kỳ/trang)
         self.assertIn("pageNum: pageNum", js)
         self.assertIn("totalCount", js)
+        # Fix HTTP 403: chạy trong world MAIN (fetch của portal tự đủ header),
+        # POST không CSRF trước, chỉ thêm CSRF-token khi 403/401.
+        self.assertIn('world: "MAIN"', js)
+        self.assertIn("CSRF-token", js)
+        self.assertIn("/api/v3/config/website", js)
+        self.assertIn('res.headers.get("csrf-token")', js)
+
+        with open("popup.js", encoding="utf-8") as f:
+            js0 = f.read()
+        self.assertIn('world: "MAIN"', js0)
+        self.assertIn("/api/v3/config/website", js0)
 
         with open("affiliate_content.js", encoding="utf-8") as f:
             js2 = f.read()
         self.assertNotIn("taxTotalAmount", js2)
         # Đã bỏ cào DOM (el eligible = net gán sai nghĩa => sai phân rã)
         self.assertNotIn("querySelectorAll", js2)
+        self.assertIn("/api/v3/config/website", js2)
 
     def test_october_2026_user_validation_oracle(self):
         # Bảng chân lý đối soát chính xác theo yêu cầu người dùng (Từng dòng và Tổng cộng):
