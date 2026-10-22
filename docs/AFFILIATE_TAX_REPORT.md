@@ -160,10 +160,13 @@ Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee 
 | **09/2026** | **4.499 đ** | HĐ `7581980` | Hợp lệ | 459.292 đ (Net: 454.793 đ) |
 | **TỔNG CỘNG** | **59.486 đ** | **9 hóa đơn điện tử** | **Hợp lệ** | **6.070.049 đ (Net: 6.010.563 đ)** |
 
-3. **Cơ chế Phân định nguồn dữ liệu kép (Dual-track Reconciliation)**:
-   * **Giai đoạn trước Tháng 10/2026**: Do Shopee chưa khấu trừ thuế tại nguồn trên Payout Record và xuất hóa đơn phí DV theo tháng hoàn thành đơn, hệ thống sử dụng `billing_list` kết hợp `service_fee_invoice` làm chuẩn hạch toán. Tổng Phí DV = **59.486 đ** (khớp chính xác 9 hóa đơn điện tử của Shopee).
-   * **Giai đoạn từ Tháng 10/2026 trở đi**: Shopee chính thức khấu trừ 5% VAT + 5% PIT + 0,98% Phí DV theo từng bill tại Payout Record, hệ thống sử dụng `payout_record` làm chuẩn đối soát tuyệt đối (5 kỳ thanh toán: Phí DV = **2.032 đ**, Gross = **207.288 đ**, Net = **186.882 đ**).
-   * **Tổng phí dịch vụ 10 tháng năm 2026** = `59.486 đ + 2.032 đ` = **61.518 đ**.
+3. **Chu kỳ phát hành hóa đơn định kỳ & Cơ chế phân định nguồn dữ liệu kép (Dual-track Reconciliation)**:
+   * **Chu kỳ phát hành định kỳ hàng tháng**: Hóa đơn phí dịch vụ điện tử trên `service_fee_invoice` được Shopee xuất **định kỳ hàng tháng sau khi kết thúc tháng** (thường vào cuối tháng hoặc đầu tháng tiếp theo) dựa trên tổng doanh thu đơn hàng hoàn thành trong tháng đó (`billing_list`).
+   * **Lý do Tháng 10/2026 chưa có hóa đơn trên `service_fee_invoice`**: Tại thời điểm hiện tại (22/10/2026), **Tháng 10/2026 chưa kết thúc** nên Shopee chưa thể chốt tổng để xuất hóa đơn phí DV cho cả tháng 10. Hóa đơn phí DV Tháng 10/2026 sẽ được Shopee phát hành vào cuối tháng 10 hoặc đầu tháng 11/2026.
+   * **Xử lý phí dịch vụ trong tháng đang diễn ra (chưa có hóa đơn chính thức)**: Trong khi tháng chưa kết thúc, hệ thống ghi nhận phí dịch vụ tạm tính theo từng kỳ thanh toán đã chi trả trên `payout_record` (ví dụ 5 kỳ đã chi trả của tháng 10 có phí DV tạm tính là **2.032 đ**). Khi hết tháng và Shopee xuất hóa đơn chính thức trên `service_fee_invoice`, hệ thống sẽ tự động cập nhật số phí chính thức từ hóa đơn này.
+   * **9 tháng đã kết thúc (01/2026 đến 09/2026)**: Đã có đủ 9 hóa đơn điện tử chính thức với tổng phí = **59.486 đ** (khớp 100% từng đồng với doanh thu hoàn thành đơn hàng).
+   * **Khấu trừ thuế tại nguồn từ 10/2026**: Shopee chính thức khấu trừ 5% VAT + 5% PIT + 0,98% Phí DV theo từng bill tại Payout Record, hệ thống sử dụng `payout_record` làm chuẩn đối soát tuyệt đối cho tháng 10 (5 kỳ thanh toán: Phí DV tạm tính = **2.032 đ**, Gross = **207.288 đ**, Net = **186.882 đ**, VAT 5% = **9.187 đ**, PIT 5% = **9.187 đ**).
+   * **Tổng phí dịch vụ 10 tháng năm 2026** = `59.486 đ (9 HĐ đã xuất) + 2.032 đ (5 kỳ tạm tính tháng 10)` = **61.518 đ**.
    * **Tổng doanh thu 10 tháng năm 2026 (Gross)** = `6.070.049 đ + 207.288 đ` = **6.277.337 đ**.
    * **Tổng thực nhận về tài khoản (Net)** = `6.010.563 đ + 186.882 đ` = **6.197.445 đ**.
 

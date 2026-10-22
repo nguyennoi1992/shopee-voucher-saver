@@ -779,15 +779,6 @@
       if (it.with_vat || vatAmt > 0) mObj.withVatCount++;
     }
 
-    // Áp dụng số liệu Hóa đơn phí dịch vụ chính thức nếu có
-    for (const mKey of Object.keys(feeInvoicesMap)) {
-      if (monthsMap[mKey] && !monthsMap[mKey].hasPayout) {
-        monthsMap[mKey].fee = feeInvoicesMap[mKey];
-        monthsMap[mKey].billTotal = Math.max(0, monthsMap[mKey].gross - monthsMap[mKey].mcn - monthsMap[mKey].fee);
-        monthsMap[mKey].netPaid = monthsMap[mKey].billTotal;
-      }
-    }
-
     // Pass 2: Payout Record theo từng kỳ chi trả thực tế
     for (const it of rawBillingList) {
       if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime)) continue;
@@ -829,6 +820,20 @@
       mObj.totalRecords++;
       if (d.wht10 > 0) mObj.withWhtCount++;
       if (d.vat > 0 || d.pit > 0) mObj.withVatCount++;
+    }
+
+    // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử chính thức từ service_fee_invoice
+    // (khi tháng đã kết thúc và được Shopee xuất HĐ chính thức, ví dụ 01-09/2026 hoặc tháng 10 khi sang tháng 11)
+    for (const mKey of Object.keys(feeInvoicesMap)) {
+      if (monthsMap[mKey]) {
+        monthsMap[mKey].fee = feeInvoicesMap[mKey];
+        monthsMap[mKey].billTotal = Math.max(0, monthsMap[mKey].gross - monthsMap[mKey].mcn - monthsMap[mKey].fee);
+        if (monthsMap[mKey].hasPayout) {
+          monthsMap[mKey].netPaid = Math.max(0, monthsMap[mKey].billTotal - monthsMap[mKey].vat - monthsMap[mKey].pit - monthsMap[mKey].wht10);
+        } else {
+          monthsMap[mKey].netPaid = monthsMap[mKey].billTotal;
+        }
+      }
     }
 
     return monthsMap;

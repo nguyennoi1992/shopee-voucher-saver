@@ -561,15 +561,6 @@ function updateAffiliateSummaryMetrics() {
     });
   }
 
-  // Áp dụng số liệu Hóa đơn phí dịch vụ chính thức nếu có
-  for (const m of Object.keys(feeInvoicesMap)) {
-    if (monthlyMap[m] && !monthlyMap[m].hasPayout) {
-      monthlyMap[m].fee = feeInvoicesMap[m];
-      monthlyMap[m].billTotal = Math.max(0, monthlyMap[m].gross - monthlyMap[m].mcn - monthlyMap[m].fee);
-      monthlyMap[m].netPaid = monthlyMap[m].billTotal;
-    }
-  }
-
   // Pass 2: Payout Record theo từng kỳ chi trả thực tế
   for (const it of cachedAffiliateList) {
     if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime)) continue;
@@ -614,6 +605,20 @@ function updateAffiliateSummaryMetrics() {
       timestamp: s,
       amount: d.gross
     });
+  }
+
+  // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử chính thức từ service_fee_invoice
+  // (khi tháng đã kết thúc và được Shopee xuất HĐ chính thức, ví dụ 01-09/2026 hoặc tháng 10 khi sang tháng 11)
+  for (const m of Object.keys(feeInvoicesMap)) {
+    if (monthlyMap[m]) {
+      monthlyMap[m].fee = feeInvoicesMap[m];
+      monthlyMap[m].billTotal = Math.max(0, monthlyMap[m].gross - monthlyMap[m].mcn - monthlyMap[m].fee);
+      if (monthlyMap[m].hasPayout) {
+        monthlyMap[m].netPaid = Math.max(0, monthlyMap[m].billTotal - monthlyMap[m].vat - monthlyMap[m].pit - monthlyMap[m].wht10);
+      } else {
+        monthlyMap[m].netPaid = monthlyMap[m].billTotal;
+      }
+    }
   }
 
   // Đồng bộ tính toán theo tháng và theo tab đảm bảo khớp chuẩn kế toán
