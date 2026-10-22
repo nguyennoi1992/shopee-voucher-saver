@@ -440,23 +440,46 @@ function updateAffiliateSummaryMetrics() {
     const gross = parseFloat(it.eligible_total_amount_dis || 0) || 0;
     const mcn = parseFloat(it.mcn_management_fee_dis || 0) || 0;
     const afterMcn = gross - mcn;
-    const feeDv = afterMcn * 0.0098;
-    const bill = afterMcn - feeDv;
 
+    // Chi tiết thuế PIT (TNCN) và VAT (GTGT) từ API nếu có
+    let whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
+    let vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
+    if (Array.isArray(it.bills)) {
+      for (const b of it.bills) {
+        whtAmt += parseFloat(b.wht_amount_dis || b.pit_amount_dis || b.wht_amount || b.pit_amount || 0) || 0;
+        vatAmt += parseFloat(b.vat_amount_dis || b.vat_amount || 0) || 0;
+      }
+    }
+
+    let feeDv = 0;
     let tax = 0;
     let taxVangLai = 0;
     let taxVat = 0;
     let taxPitKd = 0;
 
-    if (it.with_vat) {
-      taxVat = afterMcn * 0.05;
-      taxPitKd = afterMcn * 0.05;
+    // Từ tháng 10/2026, Shopee chính thức tách riêng thuế: 5% VAT và 5% PIT, không trừ phí DV 0.98%
+    if (m >= "2026-10") {
+      feeDv = 0; // Không trừ phí dịch vụ 0.98%
+      taxVangLai = 0; // Không gộp vào 10% vãng lai
+      taxVat = vatAmt > 0 ? vatAmt : Math.round(afterMcn * 0.05);
+      taxPitKd = whtAmt > 0 ? whtAmt : Math.round(afterMcn * 0.05);
       tax = taxVat + taxPitKd;
     } else {
-      taxVangLai = afterMcn * 0.10;
-      tax = taxVangLai;
+      // Trước tháng 10/2026: Phí dịch vụ sàn 0.98%
+      feeDv = afterMcn * 0.0098;
+      if (it.with_vat) {
+        taxVat = vatAmt > 0 ? vatAmt : Math.round(afterMcn * 0.05);
+        taxPitKd = whtAmt > 0 ? whtAmt : Math.round(afterMcn * 0.05);
+        taxVangLai = 0;
+      } else {
+        taxVangLai = whtAmt > 0 ? whtAmt : Math.round(afterMcn * 0.10);
+        taxVat = 0;
+        taxPitKd = 0;
+      }
+      tax = taxVangLai + taxVat + taxPitKd;
     }
 
+    const bill = afterMcn - feeDv;
     const netTk = bill - tax;
 
     if (!monthlyMap[m]) {

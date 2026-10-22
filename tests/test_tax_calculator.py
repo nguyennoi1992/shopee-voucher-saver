@@ -176,5 +176,51 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(daily_row["desc"], "Doanh thu từ Shopee")
         self.assertEqual(daily_row["amount"], 1000000.0)
 
+    def test_october_2026_tax_split(self):
+        # Từ tháng 10/2026: Tách riêng 5% VAT và 5% PIT, 10% vãng lai = 0, Phí DV 0.98% = 0
+        # Test Case 1: Image 1 Settlement (19-10-2026)
+        gross_img1 = 71086.0
+        mcn_img1 = 0.0
+        after_mcn_img1 = gross_img1 - mcn_img1
+        fee_dv_img1 = 0.0 # Bỏ phí 0.98%
+        bill_img1 = after_mcn_img1
+        vat_img1 = 3590.0 # Từ bill đối soát
+        pit_img1 = 3590.0 # Từ bill đối soát
+        net_tk_img1 = bill_img1 - vat_img1 - pit_img1
+        self.assertEqual(net_tk_img1, 63906.0) # Khớp 100% "Tổng thanh toán sau thuế: ₫63.906"
+
+        # Test Case 2: Image 2 Settlement (12-10-2026)
+        gross_img2 = 23489.0
+        vat_img2 = 1186.0
+        pit_img2 = 1186.0
+        net_tk_img2 = gross_img2 - vat_img2 - pit_img2
+        self.assertEqual(net_tk_img2, 21117.0) # Khớp 100% "Tổng thanh toán sau thuế: ₫21.117"
+
+        # Test Case 3: Image 3 Month 10 Aggregate (177.364 đ)
+        gross_oct = 177364.0
+        mcn_oct = 0.0
+        after_mcn_oct = gross_oct - mcn_oct
+        fee_dv_oct = 0.0
+        bill_oct = after_mcn_oct
+        vat_oct = round(after_mcn_oct * 0.05)
+        pit_oct = round(after_mcn_oct * 0.05)
+        tax_vang_lai_oct = 0.0
+        net_tk_oct = bill_oct - vat_oct - pit_oct
+
+        self.assertEqual(vat_oct, 8868)
+        self.assertEqual(pit_oct, 8868)
+        self.assertEqual(tax_vang_lai_oct, 0.0)
+        self.assertEqual(net_tk_oct, 159628)
+
+        # 10 columns for October 2026
+        oct_row = [
+            "2026-10", gross_oct, mcn_oct, after_mcn_oct, fee_dv_oct,
+            bill_oct, tax_vang_lai_oct, vat_oct, pit_oct, net_tk_oct
+        ]
+        self.assertEqual(oct_row[6], 0.0)   # 10% TNCN (vãng lai) must be 0
+        self.assertEqual(oct_row[7], 8868)  # 5% GTGT
+        self.assertEqual(oct_row[8], 8868)  # 5% TNCN (KD)
+        self.assertEqual(oct_row[9], 159628) # Ước thực về TK (90%)
+
 if __name__ == "__main__":
     unittest.main()

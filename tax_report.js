@@ -266,12 +266,12 @@
       const billTotalAmt = parseFloat(it.total_payment_amount_dis || 0) || 0;
 
       // wht / vat from bills if available
-      let whtAmt = 0;
-      let vatAmt = 0;
+      let whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
+      let vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
       if (Array.isArray(it.bills)) {
         for (const b of it.bills) {
-          whtAmt += parseFloat(b.wht_amount_dis || 0) || 0;
-          vatAmt += parseFloat(b.vat_amount_dis || 0) || 0;
+          whtAmt += parseFloat(b.wht_amount_dis || b.pit_amount_dis || b.wht_amount || b.pit_amount || 0) || 0;
+          vatAmt += parseFloat(b.vat_amount_dis || b.vat_amount || 0) || 0;
         }
       }
 
@@ -340,7 +340,14 @@
       const gross = data ? data.gross : 0;
       const mcn = data ? data.mcn : 0;
       const afterMcn = gross - mcn;
-      const feeDv = afterMcn * SERVICE_FEE_RATE;
+
+      const isOctober2026Onwards = mKey >= "2026-10";
+
+      // Phí DV: Shopee không thu phí DV 0.98% từ 10/2026 khi áp dụng tách 5% VAT + 5% PIT
+      let feeDv = 0;
+      if (!isOctober2026Onwards) {
+        feeDv = afterMcn * SERVICE_FEE_RATE;
+      }
       const billReal = afterMcn - feeDv;
 
       let wht10 = 0;
@@ -348,29 +355,38 @@
       let tncnKd5 = 0;
 
       if (taxMode === "hkd") {
-        vat5 = afterMcn * 0.05;
-        tncnKd5 = afterMcn * 0.05;
+        vat5 = data && data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
+        tncnKd5 = data && data.wht > 0 ? data.wht : Math.round(afterMcn * 0.05);
       } else if (taxMode === "individual") {
-        wht10 = afterMcn * 0.10;
-      } else {
-        // "actual": check data flags
-        const hasVat = data && (data.withVatCount > 0 || data.vat > 0);
-        const hasWht = data && (data.withWhtCount > 0 || data.wht > 0);
-
-        if (hasVat && !hasWht) {
-          vat5 = afterMcn * 0.05;
-          tncnKd5 = afterMcn * 0.05;
-        } else if (hasWht && !hasVat) {
-          wht10 = afterMcn * 0.10;
-        } else if (hasWht && hasVat) {
-          // split ratio based on actual records
-          const ratioVat = data.withVatCount / (data.totalRecords || 1);
-          vat5 = afterMcn * ratioVat * 0.05;
-          tncnKd5 = afterMcn * ratioVat * 0.05;
-          wht10 = afterMcn * (1 - ratioVat) * 0.10;
+        if (isOctober2026Onwards) {
+          // Từ 10/2026, kể cả tài khoản cá nhân, Shopee đã chính thức tách riêng 5% VAT và 5% PIT
+          vat5 = data && data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
+          tncnKd5 = data && data.wht > 0 ? data.wht : Math.round(afterMcn * 0.05);
         } else {
-          // Default to withholding 10%
-          wht10 = afterMcn * 0.10;
+          wht10 = data && data.wht > 0 ? data.wht : Math.round(afterMcn * 0.10);
+        }
+      } else {
+        // "actual" mode
+        if (isOctober2026Onwards) {
+          // Từ 10/2026: Tách riêng 5% VAT và 5% PIT, 10% vãng lai = 0
+          vat5 = data && data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
+          tncnKd5 = data && data.wht > 0 ? data.wht : Math.round(afterMcn * 0.05);
+          wht10 = 0;
+        } else {
+          const hasVat = data && (data.withVatCount > 0 || data.vat > 0);
+          const hasWht = data && (data.withWhtCount > 0 || data.wht > 0);
+
+          if (hasVat && !hasWht) {
+            vat5 = data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
+            tncnKd5 = data.wht > 0 ? data.wht : Math.round(afterMcn * 0.05);
+          } else if (hasWht && !hasVat) {
+            wht10 = data.wht > 0 ? data.wht : Math.round(afterMcn * 0.10);
+          } else if (hasWht && hasVat) {
+            vat5 = data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
+            tncnKd5 = data.wht > 0 ? data.wht : Math.round(afterMcn * 0.05);
+          } else {
+            wht10 = Math.round(afterMcn * 0.10);
+          }
         }
       }
 
