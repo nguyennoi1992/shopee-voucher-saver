@@ -269,5 +269,50 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertEqual(bill_real, 21397.0)
         self.assertEqual(net_tk, 21397.0)   # Khớp 100% "Tổng thanh toán sau thuế: ₫21.397"
 
+    def test_full_year_zero_wht_when_no_api_tax(self):
+        # Kiểm tra trường hợp của user trong Image 1 & 2:
+        # Cả 9 tháng đầu năm đều không bị trừ thuế TNCN trên bill thực tế (wht = 0)
+        # Tháng 10 tách 5% VAT và 5% PIT.
+        # Kết quả: Cột "10% TNCN (vãng lai)" của cả năm (từ tháng 1 đến tháng 10) phải bằng 0 đ!
+        months_gross = [
+            ("2026-01", 1224353.0),
+            ("2026-02", 697783.0),
+            ("2026-03", 996667.0),
+            ("2026-04", 582415.0),
+            ("2026-05", 647819.0),
+            ("2026-06", 343999.0),
+            ("2026-07", 452905.0),
+            ("2026-08", 664816.0),
+            ("2026-09", 459292.0),
+            ("2026-10", 177364.0)
+        ]
+
+        total_gross = 0.0
+        total_wht10 = 0.0
+        total_vat5 = 0.0
+        total_pit5 = 0.0
+
+        for m_key, gross in months_gross:
+            total_gross += gross
+            is_oct = m_key >= "2026-10"
+            if is_oct:
+                wht10 = 0.0
+                vat5 = round(gross * 0.05)
+                pit5 = round(gross * 0.05)
+            else:
+                # Không có wht trên bill thực tế -> wht10 = 0.0 (TUYỆT ĐỐI không tự ý tính 10%)
+                wht10 = 0.0
+                vat5 = 0.0
+                pit5 = 0.0
+
+            total_wht10 += wht10
+            total_vat5 += vat5
+            total_pit5 += pit5
+
+        self.assertEqual(total_gross, 6247413.0)
+        self.assertEqual(total_wht10, 0.0)      # Cột 10% TNCN của cả năm PHẢI BẰNG 0 đ!
+        self.assertEqual(total_vat5, 8868.0)    # Chỉ tháng 10 có 5% VAT
+        self.assertEqual(total_pit5, 8868.0)    # Chỉ tháng 10 có 5% PIT
+
 if __name__ == "__main__":
     unittest.main()

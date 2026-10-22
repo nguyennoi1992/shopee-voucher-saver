@@ -372,43 +372,21 @@
           billReal = afterMcn - feeDv;
           netTk = (data && data.billTotal > 0) ? data.billTotal : (billReal - vat5 - tncnKd5);
         } else if (taxMode === "individual") {
-          wht10 = (data && data.wht > 0) ? data.wht : (data && data.withWhtCount > 0 ? Math.round(afterMcn * 0.10) : 0);
+          wht10 = (data && data.wht > 0) ? data.wht : 0;
           vat5 = 0;
           tncnKd5 = 0;
           feeDv = (data && data.fee > 0) ? data.fee : 0;
-          billReal = afterMcn - feeDv;
-          netTk = (data && data.billTotal > 0 && wht10 === 0) ? data.billTotal : (billReal - wht10);
+          billReal = (data && data.billTotal > 0) ? data.billTotal : (afterMcn - feeDv);
+          netTk = (data && data.billTotal > 0) ? data.billTotal : (billReal - wht10);
         } else {
-          // "actual": Lấy dữ liệu thực tế từ API Shopee trả về
-          const hasVat = data && (data.withVatCount > 0 || data.vat > 0);
-          const hasWht = data && (data.withWhtCount > 0 || data.wht > 0);
-
-          if (hasWht && data.wht > 0) {
-            wht10 = data.wht;
-          } else if (hasWht) {
-            wht10 = Math.round(afterMcn * 0.10);
-          } else {
-            // Dưới ngưỡng khấu trừ thuế TNCN hoặc không bị trừ trên API -> 0 đ!
-            wht10 = 0;
-          }
-
-          if (hasVat && data.vat > 0) {
-            vat5 = data.vat;
-          } else {
-            vat5 = 0;
-          }
-
+          // "actual": Lấy chính xác dữ liệu thực tế từ API Shopee trả về
+          // Chỉ hiển thị thuế TNCN khi trên bill thực tế có trừ (data.wht > 0)
+          // Nếu thu nhập dưới ngưỡng khấu trừ (data.wht === 0) thì thuế TNCN bằng 0 đ!
+          wht10 = (data && data.wht > 0) ? data.wht : 0;
+          vat5 = (data && data.vat > 0) ? data.vat : 0;
           tncnKd5 = 0;
-
-          if (data && data.fee > 0) {
-            feeDv = data.fee;
-          } else if (data && data.billTotal > 0) {
-            feeDv = Math.max(0, Math.round(afterMcn - data.billTotal - wht10 - vat5));
-          } else {
-            feeDv = 0;
-          }
-
-          billReal = afterMcn - feeDv;
+          feeDv = (data && data.fee > 0) ? data.fee : 0;
+          billReal = (data && data.billTotal > 0) ? data.billTotal : (afterMcn - feeDv);
           netTk = (data && data.billTotal > 0) ? data.billTotal : (billReal - wht10 - vat5);
         }
       }
