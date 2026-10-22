@@ -494,84 +494,41 @@ function updateAffiliateSummaryMetrics() {
 
   const monthlyMap = {};
   const dailyList = [];
-  const payoutMonths = new Set();
-
+  const feeInvoicesMap = {};
   for (const it of cachedAffiliateList) {
-    if (it.paymentPayout || it.payoutId || it.payoutCreatedTime) {
-      const p = it.paymentPayout || it;
-      const s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
-      if (s) {
-        const dt = new Date(s * 1000 + 7 * 3600000);
-        const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-        payoutMonths.add(m);
-      }
+    if (it.isFeeInvoice || (it.paymentSummaryBillFeeInvoices && it.totalServiceFee) || (it.paymentCompletePeriodStartTime && it.totalServiceFee && !it.order_completed_period_start_time)) {
+      const s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
+      const dt = new Date(s * 1000 + 7 * 3600000);
+      const m = it.monthKey || (s ? `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}` : null);
+      if (m) feeInvoicesMap[m] = decScale(it.totalServiceFee);
     }
   }
 
+  const monthlyMap = {};
+  const dailyList = [];
+
+  // Pass 1: Billing List theo ngày hoàn thành đơn (chuẩn hạch toán doanh thu và HĐ phí DV cho các tháng trước 10/2026)
   for (const it of cachedAffiliateList) {
-    let s = 0;
-    let gross = 0;
-    let mcn = 0;
-    let netPaid = 0;
-    let feeAmt = 0;
-    let whtAmt = 0;
-    let vatAmt = 0;
-    let billTotal = 0;
-
-    if (it.paymentPayout || it.payoutId || it.payoutCreatedTime) {
-      const p = it.paymentPayout || it;
-      s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
-      if (!s) continue;
-
-      const dt = new Date(s * 1000 + 7 * 3600000);
-      const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-      if (fromM && m < fromM) continue;
-      if (toM && m > toM) continue;
-
-      // Phân rã từng kỳ chi trả theo chuẩn đối soát: gross - fee 0.98% - VAT 5% - PIT 5% = thực nhận
-      const d = decomposeAffiliatePayout(it, m);
-      gross = d.gross;
-      mcn = d.mcn;
-      netPaid = d.net;
-      feeAmt = d.fee;
-      whtAmt = d.wht10;
-      vatAmt = d.vat;
-      billTotal = d.billTotal;
-      var payoutPitAmt = d.pit;
-    } else {
-      s = it.order_completed_period_start_time;
-      if (!s) continue;
-      const dt = new Date(s * 1000 + 7 * 3600000);
-      const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-      if (payoutMonths.has(m)) {
-        continue;
-      }
-      if (fromM && m < fromM) continue;
-      if (toM && m > toM) continue;
-
-      gross = parseFloat(it.eligible_total_amount_dis || it.eligible_total_amount || 0) || 0;
-      mcn = parseFloat(it.mcn_management_fee_dis || it.mcn_management_fee || 0) || 0;
-      billTotal = parseFloat(it.total_payment_amount_dis || it.total_payment_amount || 0) || 0;
-
-      // Chi tiết thuế PIT (TNCN), VAT (GTGT) và phí dịch vụ từ API thực tế
-      whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
-      vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
-      feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
-
-      if (Array.isArray(it.bills)) {
-        for (const b of it.bills) {
-          whtAmt += parseFloat(b.wht_amount_dis || b.pit_amount_dis || b.wht_amount || b.pit_amount || 0) || 0;
-          vatAmt += parseFloat(b.vat_amount_dis || b.vat_amount || 0) || 0;
-          feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
-        }
-      }
-      var payoutPitAmt = whtAmt; // fallback: giữ semantics ước tính như chi nhánh theo tháng
-    }
-
+    if (it.paymentPayout || it.payoutId || it.isFeeInvoice) continue;
+    const s = it.order_completed_period_start_time;
+    if (!s) continue;
     const dt = new Date(s * 1000 + 7 * 3600000);
     const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-    if (fromM && m < fromM) continue;
-    if (toM && m > toM) continue;
+
+    const gross = parseFloat(it.eligible_total_amount_dis || it.eligible_total_amount || 0) || 0;
+    const mcn = parseFloat(it.mcn_management_fee_dis || it.mcn_management_fee || 0) || 0;
+    const billTotal = parseFloat(it.total_payment_amount_dis || it.total_payment_amount || 0) || 0;
+    const whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
+    const vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
+    let feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
+    if (Array.isArray(it.bills)) {
+      for (const b of it.bills) {
+        feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
+      }
+    }
+    if (feeAmt === 0 && billTotal > 0 && (gross - mcn) > billTotal) {
+      feeAmt = Math.round((gross - mcn) - billTotal);
+    }
 
     if (!monthlyMap[m]) {
       monthlyMap[m] = {
@@ -587,24 +544,75 @@ function updateAffiliateSummaryMetrics() {
         hasPayout: false
       };
     }
-
     monthlyMap[m].gross += gross;
     monthlyMap[m].mcn += mcn;
     monthlyMap[m].billTotal += billTotal;
     monthlyMap[m].wht10 += whtAmt;
-    monthlyMap[m].pit += payoutPitAmt;
+    monthlyMap[m].pit += whtAmt;
     monthlyMap[m].vat += vatAmt;
     monthlyMap[m].fee += feeAmt;
-    monthlyMap[m].netPaid += netPaid;
-    if (it.paymentPayout || it.payoutId || it.payoutCreatedTime) {
-      monthlyMap[m].hasPayout = true;
-    }
+    monthlyMap[m].netPaid += billTotal;
 
     const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
     dailyList.push({
       dateStr: dayStr,
       timestamp: s,
       amount: gross
+    });
+  }
+
+  // Áp dụng số liệu Hóa đơn phí dịch vụ chính thức nếu có
+  for (const m of Object.keys(feeInvoicesMap)) {
+    if (monthlyMap[m] && !monthlyMap[m].hasPayout) {
+      monthlyMap[m].fee = feeInvoicesMap[m];
+      monthlyMap[m].billTotal = Math.max(0, monthlyMap[m].gross - monthlyMap[m].mcn - monthlyMap[m].fee);
+      monthlyMap[m].netPaid = monthlyMap[m].billTotal;
+    }
+  }
+
+  // Pass 2: Payout Record theo từng kỳ chi trả thực tế
+  for (const it of cachedAffiliateList) {
+    if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime)) continue;
+    if (it.isFeeInvoice) continue;
+    const p = it.paymentPayout || it;
+    const s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
+    if (!s) continue;
+
+    const dt = new Date(s * 1000 + 7 * 3600000);
+    const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+    const isOctOnwards = m >= "2026-10";
+
+    // Trước 10/2026: giữ nguyên số liệu billing_list đã khớp hóa đơn điện tử
+    if (!isOctOnwards && monthlyMap[m] && monthlyMap[m].gross > 0 && !monthlyMap[m].hasPayout) {
+      continue;
+    }
+
+    if (isOctOnwards && (!monthlyMap[m] || !monthlyMap[m].hasPayout)) {
+      monthlyMap[m] = { month: m, gross: 0, mcn: 0, billTotal: 0, wht10: 0, pit: 0, vat: 0, fee: 0, netPaid: 0, hasPayout: true };
+      for (let i = dailyList.length - 1; i >= 0; i--) {
+        const parts = dailyList[i].dateStr.split("/");
+        const dm = `${parts[2]}-${parts[1]}`;
+        if (dm === m) dailyList.splice(i, 1);
+      }
+    } else if (!monthlyMap[m]) {
+      monthlyMap[m] = { month: m, gross: 0, mcn: 0, billTotal: 0, wht10: 0, pit: 0, vat: 0, fee: 0, netPaid: 0, hasPayout: true };
+    }
+
+    const d = decomposeAffiliatePayout(it, m);
+    monthlyMap[m].gross += d.gross;
+    monthlyMap[m].mcn += d.mcn;
+    monthlyMap[m].billTotal += d.billTotal;
+    monthlyMap[m].wht10 += d.wht10;
+    monthlyMap[m].pit += d.pit;
+    monthlyMap[m].vat += d.vat;
+    monthlyMap[m].fee += d.fee;
+    monthlyMap[m].netPaid += d.net;
+
+    const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
+    dailyList.push({
+      dateStr: dayStr,
+      timestamp: s,
+      amount: d.gross
     });
   }
 
@@ -979,7 +987,66 @@ async function fetchAffiliateLive() {
           billingData = { error: err.message };
         }
 
-        return { payouts, billingData, gqlIssues: gqlIssues.join(" | ") };
+        // 3. GraphQL getPaymentSummaryBillFeeInvoiceList - Hóa đơn phí dịch vụ điện tử (service_fee_invoice)
+        const feeInvoices = [];
+        const FEE_INVOICE_QUERY = `
+          query GetPaymentSummaryBillFeeInvoiceListQuery($pageNum: Int, $pageSize: Int, $serviceFeeInvoiceFilter: ServiceFeeInvoiceFilterInput) {
+            getPaymentSummaryBillFeeInvoiceList(pageNum: $pageNum, pageSize: $pageSize, serviceFeeInvoiceFilter: $serviceFeeInvoiceFilter) {
+              pageNum
+              pageSize
+              paymentSummaryBillFeeInvoices {
+                paymentCompletePeriodStartTime
+                paymentCompletePeriodEndTime
+                totalServiceFee
+                paymentSummaryBillFeeInvoices {
+                  invoiceNumber
+                  invoiceStatus
+                  fileUrl
+                }
+              }
+              totalCount
+            }
+          }`;
+        try {
+          if (gql403Count < 2) {
+            const callFeeGql = async (withCsrf) => {
+              const headers = Object.assign({}, baseHeaders);
+              if (withCsrf && csrfToken) headers["CSRF-token"] = csrfToken;
+              const res = await fetch("/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList", {
+                method: "POST",
+                headers: headers,
+                body: JSON.stringify({
+                  operationName: "GetPaymentSummaryBillFeeInvoiceListQuery",
+                  query: FEE_INVOICE_QUERY,
+                  variables: { pageSize: 50, pageNum: 1, serviceFeeInvoiceFilter: {} }
+                })
+              });
+              let json = null;
+              try { json = await res.json(); } catch (_) {}
+              return { status: res.status, json: json };
+            };
+
+            let r = await callFeeGql(false);
+            let node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+            if (!node && (r.status === 403 || r.status === 401) && csrfToken) {
+              r = await callFeeGql(true);
+              node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+            }
+            if (Array.isArray(node?.paymentSummaryBillFeeInvoices)) {
+              for (const inv of node.paymentSummaryBillFeeInvoices) {
+                feeInvoices.push({
+                  isFeeInvoice: true,
+                  paymentCompletePeriodStartTime: inv.paymentCompletePeriodStartTime,
+                  paymentCompletePeriodEndTime: inv.paymentCompletePeriodEndTime,
+                  totalServiceFee: inv.totalServiceFee,
+                  invoiceNumber: inv.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || ""
+                });
+              }
+            }
+          }
+        } catch (_) {}
+
+        return { payouts, billingData, feeInvoices, gqlIssues: gqlIssues.join(" | ") };
       },
       args: [s, e]
     });
@@ -988,6 +1055,7 @@ async function fetchAffiliateLive() {
     const payouts = res && Array.isArray(res.payouts) ? res.payouts : [];
     const billingList = res?.billingData?.code === 0 && Array.isArray(res.billingData.data?.list)
       ? res.billingData.data.list : [];
+    const feeInvoices = res && Array.isArray(res.feeInvoices) ? res.feeInvoices : [];
 
     if (payouts.length === 0 && billingList.length === 0) {
       const detail = res?.gqlIssues || res?.billingData?.msg || "Kiểm tra đăng nhập Shopee Affiliate.";
@@ -995,7 +1063,7 @@ async function fetchAffiliateLive() {
       return;
     }
 
-    cachedAffiliateList = [...payouts, ...billingList];
+    cachedAffiliateList = [...payouts, ...billingList, ...feeInvoices];
     if (chrome?.storage?.local) {
       chrome.storage.local.set({
         [AFFILIATE_CACHE_KEY_V2]: {
@@ -1005,10 +1073,11 @@ async function fetchAffiliateLive() {
       });
     }
     loadAffiliateSummary();
+    const feeNote = feeInvoices.length > 0 ? ` + ${feeInvoices.length} HĐ phí DV` : "";
     if (payouts.length > 0) {
-      setAffiliateStatus(`Đã đồng bộ ${payouts.length} kỳ thanh toán (Payout Record - chuẩn đối soát từng bill) + ${billingList.length} bản ghi Billing List thành công!`, "success");
+      setAffiliateStatus(`Đã đồng bộ ${payouts.length} kỳ thanh toán (Payout Record) + ${billingList.length} bản ghi Billing List${feeNote} thành công!`, "success");
     } else {
-      setAffiliateStatus(`Đã đồng bộ ${billingList.length} bản ghi Billing List (theo ngày hoàn thành đơn) thành công!`, "success");
+      setAffiliateStatus(`Đã đồng bộ ${billingList.length} bản ghi Billing List${feeNote} thành công!`, "success");
     }
     if (payouts.length === 0) {
       setAffiliateStatus("Cảnh báo: không lấy được kỳ thanh toán từ Payout Record"

@@ -566,6 +566,8 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertNotIn("whtRate\n", js)
         self.assertNotIn('"taxTotalAmount"', js)
         self.assertIn('"/api/v3/gql?q=getPayoutList"', js)
+        self.assertIn('"/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList"', js)
+        self.assertIn("paymentSummaryBillFeeInvoices", js)
         self.assertIn('"Affiliate-Program-Type"', js)
         # payoutInvoice là Object/List phải có subfield selection hợp lệ trong GraphQL
         self.assertIn("payoutInvoice {", js)
@@ -587,6 +589,8 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertIn('world: "MAIN"', js0)
         self.assertIn("/api/v3/config/website", js0)
         self.assertIn("payoutInvoice {", js0)
+        self.assertIn('"/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList"', js0)
+        self.assertIn("paymentSummaryBillFeeInvoices", js0)
 
         with open("affiliate_content.js", encoding="utf-8") as f:
             js2 = f.read()
@@ -595,6 +599,8 @@ class TestTaxCalculator(unittest.TestCase):
         self.assertNotIn("querySelectorAll", js2)
         self.assertIn("/api/v3/config/website", js2)
         self.assertIn("payoutInvoice {", js2)
+        self.assertIn('"/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList"', js2)
+        self.assertIn("paymentSummaryBillFeeInvoices", js2)
 
     def test_parse_pasted_table_matches_user_oracle(self):
         import subprocess, json
@@ -673,6 +679,138 @@ TỔNG CỘNG	5 kỳ	207.288 đ	2.032 đ	205.256 đ	9.187 đ	9.187 đ	186.882 đ
         self.assertEqual(sum_pit, 9187, "Tổng 5% PIT phải là 9.187 đ (1.912 + 2.499 + 1.186 + 3.590)")
         self.assertEqual(sum_net, 186882, "Tổng Thực nhận sau thuế phải là 186.882 đ")
         self.assertEqual(sum_valid, sum_net + sum_vat + sum_pit, "Doanh thu hợp lệ = Thực nhận + VAT + PIT")
+
+    def test_service_fee_invoice_exact_reconciliation_and_parsing(self):
+        import subprocess, json
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf8');
+        const parseMatch = code.match(/function parsePastedTextOrJson\\([\\s\\S]*?^  \\}/m);
+        eval(parseMatch[0]);
+
+        const userFeePayload = {
+          "data": {
+            "getPaymentSummaryBillFeeInvoiceList": {
+              "pageNum": 1,
+              "pageSize": 10,
+              "paymentSummaryBillFeeInvoices": [
+                { "paymentCompletePeriodStartTime": "1788282000", "totalServiceFee": "449900000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "7581980" }] },
+                { "paymentCompletePeriodStartTime": "1785603600", "totalServiceFee": "651700000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "6702172" }] },
+                { "paymentCompletePeriodStartTime": "1782925200", "totalServiceFee": "443700000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "5867961" }] },
+                { "paymentCompletePeriodStartTime": "1780333200", "totalServiceFee": "337100000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "4606030" }] },
+                { "paymentCompletePeriodStartTime": "1777654800", "totalServiceFee": "634900000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "4085126" }] },
+                { "paymentCompletePeriodStartTime": "1775062800", "totalServiceFee": "570900000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "3320336" }] },
+                { "paymentCompletePeriodStartTime": "1772384400", "totalServiceFee": "976700000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "2790122" }] },
+                { "paymentCompletePeriodStartTime": "1769965200", "totalServiceFee": "683800000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "1600351" }] },
+                { "paymentCompletePeriodStartTime": "1767286800", "totalServiceFee": "1199900000", "paymentSummaryBillFeeInvoices": [{ "invoiceNumber": "741234" }] }
+              ],
+              "totalCount": 9
+            }
+          }
+        };
+
+        const parsedJsonInvoices = parsePastedTextOrJson(JSON.stringify(userFeePayload));
+
+        const sampleText = `
+Thg 09 2026	₫4.499	7581980	Hợp lệ	Tải về
+Thg 08 2026	₫6.517	6702172	Hợp lệ	Tải về
+Thg 07 2026	₫4.437	5867961	Hợp lệ	Tải về
+Thg 06 2026	₫3.371	4606030	Hợp lệ	Tải về
+Thg 05 2026	₫6.349	4085126	Hợp lệ	Tải về
+Thg 04 2026	₫5.709	3320336	Hợp lệ	Tải về
+Thg 03 2026	₫9.767	2790122	Hợp lệ	Tải về
+Thg 02 2026	₫6.838	1600351	Hợp lệ	Tải về
+Thg 01 2026	₫11.999	741234	Hợp lệ	Tải về
+        `;
+        const parsedTextInvoices = parsePastedTextOrJson(sampleText);
+
+        // Test dual-track processData with both billing list and payouts
+        const SERVICE_FEE_RATE = 0.0098;
+        let rawBillingList = [];
+        const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
+        const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
+        const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
+        const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
+        const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        eval(decScaleMatch[0]);
+        eval(epochMatch[0]);
+        eval(decompMatch[0]);
+        eval(entryMatch[0]);
+        eval(processMatch[0]);
+
+        const mockBillingList = [
+          { order_completed_period_start_time: 1767200400, eligible_total_amount_dis: "1224353", total_payment_amount_dis: "1212354" },
+          { order_completed_period_start_time: 1769878800, eligible_total_amount_dis: "697783", total_payment_amount_dis: "690945" },
+          { order_completed_period_start_time: 1772470800, eligible_total_amount_dis: "996667", total_payment_amount_dis: "986900" },
+          { order_completed_period_start_time: 1775062800, eligible_total_amount_dis: "582415", total_payment_amount_dis: "576706" },
+          { order_completed_period_start_time: 1777654800, eligible_total_amount_dis: "647819", total_payment_amount_dis: "641470" },
+          { order_completed_period_start_time: 1780333200, eligible_total_amount_dis: "343999", total_payment_amount_dis: "340628" },
+          { order_completed_period_start_time: 1782925200, eligible_total_amount_dis: "452905", total_payment_amount_dis: "448468" },
+          { order_completed_period_start_time: 1785603600, eligible_total_amount_dis: "664816", total_payment_amount_dis: "658299" },
+          { order_completed_period_start_time: 1788282000, eligible_total_amount_dis: "459292", total_payment_amount_dis: "454793" },
+          { order_completed_period_start_time: 1790960400, eligible_total_amount_dis: "177364", total_payment_amount_dis: "177364" },
+        ];
+
+        const mockOctoberPayouts = [
+          { paymentPayout: { payoutId: "1001", payoutCreatedTime: "1790794806", eligibleTotalAmount: "2356200000", totalPaymentAmount: "2333100000" } },
+          { paymentPayout: { payoutId: "1005", payoutCreatedTime: "1791140407", eligibleTotalAmount: "3823000000", totalPaymentAmount: "3403000000" } },
+          { paymentPayout: { payoutId: "1008", payoutCreatedTime: "1791399640", eligibleTotalAmount: "4998500000", totalPaymentAmount: "4449800000" } },
+          { paymentPayout: { payoutId: "1012", payoutCreatedTime: "1791745206", eligibleTotalAmount: "2372100000", totalPaymentAmount: "2111700000" } },
+          { paymentPayout: { payoutId: "1019", payoutCreatedTime: "1792350007", eligibleTotalAmount: "7179000000", totalPaymentAmount: "6390600000" } },
+        ];
+
+        // Also add an old cash settlement from January to test isolation
+        const oldPayout = [
+          { paymentPayout: { payoutId: "old_jan", payoutCreatedTime: "1767500000", eligibleTotalAmount: "1228616000", totalPaymentAmount: "1216576000" } }
+        ];
+
+        rawBillingList = [...mockBillingList, ...mockOctoberPayouts, ...oldPayout, ...parsedJsonInvoices];
+        const monthsResult = processData();
+
+        console.log(JSON.stringify({
+          jsonCount: parsedJsonInvoices.length,
+          textCount: parsedTextInvoices.length,
+          months: monthsResult
+        }));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+        self.assertEqual(out["jsonCount"], 9)
+        self.assertEqual(out["textCount"], 9)
+
+        m = out["months"]
+        # Tháng 1 đến 9: Phí dịch vụ phải khớp chính xác hóa đơn điện tử Shopee cấp
+        expected_fees = {
+            "2026-01": 11999,
+            "2026-02": 6838,
+            "2026-03": 9767,
+            "2026-04": 5709,
+            "2026-05": 6349,
+            "2026-06": 3371,
+            "2026-07": 4437,
+            "2026-08": 6517,
+            "2026-09": 4499,
+        }
+        fee_sum_0109 = 0
+        for m_key, exp_fee in expected_fees.items():
+            self.assertEqual(m[m_key]["fee"], exp_fee, f"Sai phí DV tại {m_key}")
+            self.assertEqual(m[m_key]["gross"] - m[m_key]["fee"], m[m_key]["billTotal"])
+            fee_sum_0109 += m[m_key]["fee"]
+
+        self.assertEqual(fee_sum_0109, 59486, "Tổng phí DV 9 tháng đầu phải là 59.486 đ")
+
+        # Tháng 10: Khớp chính xác 5 kỳ thanh toán Payout Record
+        self.assertEqual(m["2026-10"]["fee"], 2032, "Phí DV tháng 10 phải là 2.032 đ")
+        self.assertEqual(m["2026-10"]["gross"], 207288, "Gross tháng 10 phải là 207.288 đ")
+        self.assertEqual(m["2026-10"]["billTotal"], 205256, "Doanh thu hợp lệ tháng 10 phải là 205.256 đ")
+        self.assertEqual(m["2026-10"]["vat"], 9187, "5% VAT tháng 10 phải là 9.187 đ")
+        self.assertEqual(m["2026-10"]["pit"], 9187, "5% PIT tháng 10 phải là 9.187 đ")
+        self.assertEqual(m["2026-10"]["netPaid"], 186882, "Thực nhận sau thuế tháng 10 phải là 186.882 đ")
+
+        # Tổng lũy kế 10 tháng
+        total_10m_fee = sum(m[f"2026-{str(i).padStart(2, '0') if hasattr(str(i), 'padStart') else f'{i:02d}'}"]["fee"] for i in range(1, 11))
+        self.assertEqual(total_10m_fee, 61518, "Tổng phí DV 10 tháng phải là 61.518 đ (59.486 + 2.032)")
+
 
 if __name__ == "__main__":
     unittest.main()

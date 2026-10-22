@@ -258,11 +258,61 @@
         }
       } catch (_) {}
 
-      if (payouts.length > 0 || billingList.length > 0) {
+      // 3. GraphQL getPaymentSummaryBillFeeInvoiceList - Hóa đơn phí dịch vụ điện tử (service_fee_invoice)
+      const feeInvoices = [];
+      const FEE_INVOICE_QUERY = `
+        query GetPaymentSummaryBillFeeInvoiceListQuery($pageNum: Int, $pageSize: Int, $serviceFeeInvoiceFilter: ServiceFeeInvoiceFilterInput) {
+          getPaymentSummaryBillFeeInvoiceList(pageNum: $pageNum, pageSize: $pageSize, serviceFeeInvoiceFilter: $serviceFeeInvoiceFilter) {
+            pageNum
+            pageSize
+            paymentSummaryBillFeeInvoices {
+              paymentCompletePeriodStartTime
+              paymentCompletePeriodEndTime
+              totalServiceFee
+              paymentSummaryBillFeeInvoices {
+                invoiceNumber
+                invoiceStatus
+                fileUrl
+              }
+            }
+            totalCount
+          }
+        }`;
+      try {
+        if (gql403Count < 2) {
+          const hdrs = Object.assign({}, headers);
+          if (csrfToken) hdrs["CSRF-token"] = csrfToken;
+          const res = await fetch("/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList", {
+            method: "POST",
+            headers: hdrs,
+            body: JSON.stringify({
+              operationName: "GetPaymentSummaryBillFeeInvoiceListQuery",
+              query: FEE_INVOICE_QUERY,
+              variables: { pageSize: 50, pageNum: 1, serviceFeeInvoiceFilter: {} }
+            })
+          });
+          let json = null;
+          try { json = await res.json(); } catch (_) {}
+          const node = json?.data?.getPaymentSummaryBillFeeInvoiceList;
+          if (Array.isArray(node?.paymentSummaryBillFeeInvoices)) {
+            for (const inv of node.paymentSummaryBillFeeInvoices) {
+              feeInvoices.push({
+                isFeeInvoice: true,
+                paymentCompletePeriodStartTime: inv.paymentCompletePeriodStartTime,
+                paymentCompletePeriodEndTime: inv.paymentCompletePeriodEndTime,
+                totalServiceFee: inv.totalServiceFee,
+                invoiceNumber: inv.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || ""
+              });
+            }
+          }
+        }
+      } catch (_) {}
+
+      if (payouts.length > 0 || billingList.length > 0 || feeInvoices.length > 0) {
         chrome.storage.local.set({
           [STORAGE_KEY]: {
             updatedAt: Date.now(),
-            list: [...payouts, ...billingList]
+            list: [...payouts, ...billingList, ...feeInvoices]
           }
         });
       }

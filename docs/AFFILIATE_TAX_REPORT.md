@@ -118,17 +118,62 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
 
 ### 3.3. Cơ chế Hóa đơn phí dịch vụ (service_fee_invoice) & Đối soát thanh toán
 
-Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee lưu trữ các **Hóa đơn điện tử GTGT (e-Invoice)** phát hành cho Publisher. Người dùng thường không thấy khoản phí này bị trừ trong `payment/billing` hay `payment/payout_record` do các nguyên nhân sau:
+Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee lưu trữ các **Hóa đơn điện tử GTGT (e-Invoice)** phát hành cho Publisher.
 
-1. **Bản chất của Hóa đơn phí dịch vụ**:
+1. **Nguồn API GraphQL chính thức của portal**:
+   * **Endpoint**: `POST /api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList`
+   * **Operation**: `GetPaymentSummaryBillFeeInvoiceListQuery`
+   * **Query**:
+     ```graphql
+     query GetPaymentSummaryBillFeeInvoiceListQuery($pageNum: Int, $pageSize: Int, $serviceFeeInvoiceFilter: ServiceFeeInvoiceFilterInput) {
+       getPaymentSummaryBillFeeInvoiceList(pageNum: $pageNum, pageSize: $pageSize, serviceFeeInvoiceFilter: $serviceFeeInvoiceFilter) {
+         pageNum
+         pageSize
+         paymentSummaryBillFeeInvoices {
+           paymentCompletePeriodStartTime
+           paymentCompletePeriodEndTime
+           totalServiceFee
+           paymentSummaryBillFeeInvoices {
+             invoiceNumber
+             invoiceStatus
+             fileUrl
+           }
+         }
+         totalCount
+       }
+     }
+     ```
+   * **Variables**: `{ pageNum: 1, pageSize: 50, serviceFeeInvoiceFilter: {} }`
+
+2. **Bảng đối soát Hóa đơn điện tử thực tế (9 tháng đầu năm 2026)**:
+
+| Tháng hoàn thành đơn | Số tiền Phí DV 0,98% | Số Hóa đơn GTGT | Trạng thái HĐ | Doanh thu hoàn thành đơn tương ứng |
+| :---: | :---: | :---: | :---: | :---: |
+| **01/2026** | **11.999 đ** | HĐ `741234` | Hợp lệ | 1.224.353 đ (Net: 1.212.354 đ) |
+| **02/2026** | **6.838 đ** | HĐ `1600351` | Hợp lệ | 697.783 đ (Net: 690.945 đ) |
+| **03/2026** | **9.767 đ** | HĐ `2790122` | Hợp lệ | 996.667 đ (Net: 986.900 đ) |
+| **04/2026** | **5.709 đ** | HĐ `3320336` | Hợp lệ | 582.415 đ (Net: 576.706 đ) |
+| **05/2026** | **6.349 đ** | HĐ `4085126` | Hợp lệ | 647.819 đ (Net: 641.470 đ) |
+| **06/2026** | **3.371 đ** | HĐ `4606030` | Hợp lệ | 343.999 đ (Net: 340.628 đ) |
+| **07/2026** | **4.437 đ** | HĐ `5867961` | Hợp lệ | 452.905 đ (Net: 448.468 đ) |
+| **08/2026** | **6.517 đ** | HĐ `6702172` | Hợp lệ | 664.816 đ (Net: 658.299 đ) |
+| **09/2026** | **4.499 đ** | HĐ `7581980` | Hợp lệ | 459.292 đ (Net: 454.793 đ) |
+| **TỔNG CỘNG** | **59.486 đ** | **9 hóa đơn điện tử** | **Hợp lệ** | **6.070.049 đ (Net: 6.010.563 đ)** |
+
+3. **Cơ chế Phân định nguồn dữ liệu kép (Dual-track Reconciliation)**:
+   * **Giai đoạn trước Tháng 10/2026**: Do Shopee chưa khấu trừ thuế tại nguồn trên Payout Record và xuất hóa đơn phí DV theo tháng hoàn thành đơn, hệ thống sử dụng `billing_list` kết hợp `service_fee_invoice` làm chuẩn hạch toán. Tổng Phí DV = **59.486 đ** (khớp chính xác 9 hóa đơn điện tử của Shopee).
+   * **Giai đoạn từ Tháng 10/2026 trở đi**: Shopee chính thức khấu trừ 5% VAT + 5% PIT + 0,98% Phí DV theo từng bill tại Payout Record, hệ thống sử dụng `payout_record` làm chuẩn đối soát tuyệt đối (5 kỳ thanh toán: Phí DV = **2.032 đ**, Gross = **207.288 đ**, Net = **186.882 đ**).
+   * **Tổng phí dịch vụ 10 tháng năm 2026** = `59.486 đ + 2.032 đ` = **61.518 đ**.
+   * **Tổng doanh thu 10 tháng năm 2026 (Gross)** = `6.070.049 đ + 207.288 đ` = **6.277.337 đ**.
+   * **Tổng thực nhận về tài khoản (Net)** = `6.010.563 đ + 186.882 đ` = **6.197.445 đ**.
+
+4. **Bản chất của Hóa đơn phí dịch vụ**:
    * Khi bạn tham gia Shopee Affiliate, Shopee (Công ty TNHH Shopee) đóng vai trò là đơn vị cung cấp hạ tầng công nghệ và hệ thống tiếp thị. Đổi lại, Shopee thu một khoản phí dịch vụ nền tảng.
    * Theo quy định của Luật Quản lý Thuế và Nghị định 123/2020/NĐ-CP, khi Shopee thu khoản phí này, Shopee **bắt buộc phải xuất hóa đơn GTGT hợp pháp** cho Publisher.
-2. **Tại sao không thấy khoản trừ này trong `billing` và `payout_record`?**:
    * **Cấn trừ trước khi kết xuất số liệu (Gross vs Net)**: Khoản phí dịch vụ này thực chất đã được Shopee cấn trừ ngay tại tầng xử lý giao dịch hoa hồng đơn hàng trước khi chốt danh sách. Số tiền *"Tổng doanh thu hợp lệ"* (`eligible_total_amount_dis`) bạn nhìn thấy trên `billing` và `payout_record` chính là số tiền đã trừ phí nền tảng này.
    * **Tách biệt dòng tiền và chứng từ thuế**:
      * `payout_record`: Là **sổ luân chuyển tiền mặt** (Cash Payout), ghi nhận số tiền chuyển khoản về tài khoản ngân hàng và nghĩa vụ thuế Shopee nộp thay (PIT/VAT).
      * `service_fee_invoice`: Là **kho chứng từ thuế** (Tax Accounting), phục vụ cho Publisher làm Hộ kinh doanh hoặc Doanh nghiệp lấy hóa đơn đầu vào để hạch toán chi phí hợp lý khi quyết toán thuế.
-   * Do đó, hệ thống không trừ thêm một lần nữa trên `payout_record` để tránh trừ trùng hai lần tiền phí.
 
 ### 3.4. Phân biệt Dữ liệu Payout Record (Ngày thanh toán) và Billing List (Ngày hoàn thành đơn)
 

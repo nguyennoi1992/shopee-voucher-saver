@@ -138,7 +138,23 @@
     const trimmed = text.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
       const parsed = JSON.parse(trimmed);
-      if (parsed.data?.getPaymentPayoutBillingList?.payoutList) {
+      if (parsed.data?.getPaymentSummaryBillFeeInvoiceList?.paymentSummaryBillFeeInvoices) {
+        return parsed.data.getPaymentSummaryBillFeeInvoiceList.paymentSummaryBillFeeInvoices.map(x => ({
+          isFeeInvoice: true,
+          paymentCompletePeriodStartTime: x.paymentCompletePeriodStartTime,
+          paymentCompletePeriodEndTime: x.paymentCompletePeriodEndTime,
+          totalServiceFee: x.totalServiceFee,
+          invoiceNumber: x.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || x.invoiceNumber || ""
+        }));
+      } else if (parsed.getPaymentSummaryBillFeeInvoiceList?.paymentSummaryBillFeeInvoices) {
+        return parsed.getPaymentSummaryBillFeeInvoiceList.paymentSummaryBillFeeInvoices.map(x => ({
+          isFeeInvoice: true,
+          paymentCompletePeriodStartTime: x.paymentCompletePeriodStartTime,
+          paymentCompletePeriodEndTime: x.paymentCompletePeriodEndTime,
+          totalServiceFee: x.totalServiceFee,
+          invoiceNumber: x.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || x.invoiceNumber || ""
+        }));
+      } else if (parsed.data?.getPaymentPayoutBillingList?.payoutList) {
         return parsed.data.getPaymentPayoutBillingList.payoutList;
       } else if (parsed.getPaymentPayoutBillingList?.payoutList) {
         return parsed.getPaymentPayoutBillingList.payoutList;
@@ -162,7 +178,42 @@
     const items = [];
     for (const line of lines) {
       const l = line.trim();
-      if (!l || l.startsWith("Ngày") || l.startsWith("TỔNG") || l.startsWith("Tháng")) continue;
+      if (!l || l.startsWith("Ngày") || l.startsWith("TỔNG") || l.startsWith("Thời gian")) continue;
+
+      // Nhận diện dòng sao chép từ service_fee_invoice (ví dụ: "Thg 09 2026 ₫4.499 7581980 Hợp lệ")
+      const thgMatch = l.match(/(?:Thg|Tháng)\s*(\d{1,2})[/\s]+(\d{4})/i);
+      const rangeMatch = !thgMatch ? l.match(/(\d{2}\/(\d{2})\/(\d{4})\s*-\s*\d{2}\/\d{2}\/\d{4})/) : null;
+      if (thgMatch || rangeMatch) {
+        const mKey = thgMatch ? `${thgMatch[2]}-${thgMatch[1].padStart(2, "0")}` : `${rangeMatch[3]}-${rangeMatch[2]}`;
+        const dateText = thgMatch ? thgMatch[0] : rangeMatch[1];
+        const rem = l.replace(dateText, "");
+        const numRegex = /([\d.,]+)\s*đ?/g;
+        let mNum;
+        const nums = [];
+        while ((mNum = numRegex.exec(rem)) !== null) {
+          const raw = mNum[1].replace(/\./g, "").replace(/,/g, ".");
+          const val = parseFloat(raw);
+          if (!isNaN(val)) nums.push(val);
+        }
+        let fee = 0, inv = "";
+        for (const n of nums) {
+          if (n >= 100000 && n <= 99999999 && !inv && n.toString().length >= 6) {
+            inv = n.toString();
+          } else if (n > 0 && n < 1000000 && !fee) {
+            fee = n;
+          }
+        }
+        if (fee > 0) {
+          items.push({
+            isFeeInvoice: true,
+            monthKey: mKey,
+            totalServiceFee: (fee * 100000).toString(),
+            invoiceNumber: inv
+          });
+          continue;
+        }
+      }
+
       const dateMatch = l.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
       if (!dateMatch) continue;
       const [dateStr, d, m, y] = dateMatch;
@@ -233,7 +284,13 @@
     if (!text) return;
     try {
       const parsedItems = parsePastedTextOrJson(text);
-      rawBillingList = parsedItems;
+      if (parsedItems.length > 0 && parsedItems[0].isFeeInvoice) {
+        // Hợp nhất hóa đơn phí dịch vụ vào danh sách hiện tại
+        const existing = rawBillingList.filter(x => !x.isFeeInvoice);
+        rawBillingList = [...existing, ...parsedItems];
+      } else {
+        rawBillingList = parsedItems;
+      }
       saveCache(rawBillingList);
       pasteModal.classList.remove("open");
       pasteTextarea.value = "";
@@ -548,7 +605,66 @@
             billingData = { error: err.message };
           }
 
-          return { payouts, billingData, gqlIssues: gqlIssues.join(" | ") };
+          // 3. GraphQL getPaymentSummaryBillFeeInvoiceList - Hóa đơn phí dịch vụ điện tử (service_fee_invoice)
+          const feeInvoices = [];
+          const FEE_INVOICE_QUERY = `
+            query GetPaymentSummaryBillFeeInvoiceListQuery($pageNum: Int, $pageSize: Int, $serviceFeeInvoiceFilter: ServiceFeeInvoiceFilterInput) {
+              getPaymentSummaryBillFeeInvoiceList(pageNum: $pageNum, pageSize: $pageSize, serviceFeeInvoiceFilter: $serviceFeeInvoiceFilter) {
+                pageNum
+                pageSize
+                paymentSummaryBillFeeInvoices {
+                  paymentCompletePeriodStartTime
+                  paymentCompletePeriodEndTime
+                  totalServiceFee
+                  paymentSummaryBillFeeInvoices {
+                    invoiceNumber
+                    invoiceStatus
+                    fileUrl
+                  }
+                }
+                totalCount
+              }
+            }`;
+          try {
+            if (gql403Count < 2) {
+              const callFeeGql = async (withCsrf) => {
+                const headers = Object.assign({}, baseHeaders);
+                if (withCsrf && csrfToken) headers["CSRF-token"] = csrfToken;
+                const res = await fetch("/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList", {
+                  method: "POST",
+                  headers: headers,
+                  body: JSON.stringify({
+                    operationName: "GetPaymentSummaryBillFeeInvoiceListQuery",
+                    query: FEE_INVOICE_QUERY,
+                    variables: { pageSize: 50, pageNum: 1, serviceFeeInvoiceFilter: {} }
+                  })
+                });
+                let json = null;
+                try { json = await res.json(); } catch (_) {}
+                return { status: res.status, json: json };
+              };
+
+              let r = await callFeeGql(false);
+              let node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+              if (!node && (r.status === 403 || r.status === 401) && csrfToken) {
+                r = await callFeeGql(true);
+                node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+              }
+              if (Array.isArray(node?.paymentSummaryBillFeeInvoices)) {
+                for (const inv of node.paymentSummaryBillFeeInvoices) {
+                  feeInvoices.push({
+                    isFeeInvoice: true,
+                    paymentCompletePeriodStartTime: inv.paymentCompletePeriodStartTime,
+                    paymentCompletePeriodEndTime: inv.paymentCompletePeriodEndTime,
+                    totalServiceFee: inv.totalServiceFee,
+                    invoiceNumber: inv.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || ""
+                  });
+                }
+              }
+            }
+          } catch (_) {}
+
+          return { payouts, billingData, feeInvoices, gqlIssues: gqlIssues.join(" | ") };
         },
         args: [s, e]
       });
@@ -562,6 +678,7 @@
       const payouts = Array.isArray(response.payouts) ? response.payouts : [];
       const billingList = response.billingData?.code === 0 && Array.isArray(response.billingData.data?.list)
         ? response.billingData.data.list : [];
+      const feeInvoices = Array.isArray(response.feeInvoices) ? response.feeInvoices : [];
       const billingErr = response.billingData && !response.billingData.code && response.billingData.error
         ? response.billingData.error : "";
 
@@ -571,17 +688,18 @@
         return;
       }
 
-      rawBillingList = [...payouts, ...billingList];
+      rawBillingList = [...payouts, ...billingList, ...feeInvoices];
       await saveCache(rawBillingList);
       initDataAndRender();
       const now = new Date();
       const meta = `Cập nhật lúc ${now.toLocaleTimeString("vi-VN")}`;
+      const feeNote = feeInvoices.length > 0 ? ` + ${feeInvoices.length} HĐ phí DV` : "";
       if (payouts.length > 0 && billingList.length > 0) {
-        showStatus(`Đã làm mới thành công ${payouts.length} kỳ thanh toán (Payout Record - chuẩn đối soát từng bill) + ${billingList.length} bản ghi Billing List. Lưu Cache (24h).`, "success", meta);
+        showStatus(`Đã làm mới thành công ${payouts.length} kỳ thanh toán (Payout Record) + ${billingList.length} bản ghi Billing List${feeNote}. Lưu Cache (24h).`, "success", meta);
       } else if (payouts.length > 0) {
-        showStatus(`Đã làm mới thành công ${payouts.length} kỳ thanh toán từ Payout Record (chuẩn đối soát từng bill). Lưu Cache (24h).`, "success", meta);
+        showStatus(`Đã làm mới thành công ${payouts.length} kỳ thanh toán từ Payout Record${feeNote}. Lưu Cache (24h).`, "success", meta);
       } else {
-        showStatus(`Đã tải ${billingList.length} bản ghi Billing List (theo ngày hoàn thành đơn). Lưu Cache (24h).`, "success", meta);
+        showStatus(`Đã tải ${billingList.length} bản ghi Billing List${feeNote}. Lưu Cache (24h).`, "success", meta);
       }
 
       if (payouts.length === 0) {
@@ -600,57 +718,31 @@
 
   // Data processing
   function processData() {
-    // Mỗi tháng có thể đến từ 2 nguồn:
-    //  - Payout Record (kỳ thanh toán theo ngày tạo bill - chuẩn đối soát tuyệt đối)
-    //  - Billing List (theo ngày hoàn thành đơn - dùng cho kê khai & fallback khi thiếu payout)
+    // Cơ chế phân định nguồn dữ liệu kép (Dual-track Reconciliation):
+    //  - Các tháng < 2026-10: chuẩn hạch toán theo Ngày hoàn thành đơn (Billing List) + Hóa đơn phí DV (service_fee_invoice).
+    //  - Các tháng >= 2026-10: Shopee khấu trừ thuế 5% VAT + 5% PIT theo từng bill => Payout Record là chuẩn đối soát tuyệt đối.
     const monthsMap = {};
-    const payoutMonths = new Set();
+    const feeInvoicesMap = {};
 
-    // Pass 1: Payout Record - tổng hợp theo từng kỳ chi trả thực tế (bill)
+    // 1. Rà soát danh sách Hóa đơn phí dịch vụ điện tử (service_fee_invoice)
     for (const it of rawBillingList) {
-      if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime)) continue;
-      const p = it.paymentPayout || it;
-      const s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
-      if (!s) continue;
-      const dt = parseEpochToGmt7(s);
-      const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
-      const dayNum = dt.getDate();
-
-      const d = decomposePayout(it, mKey);
-      payoutMonths.add(mKey);
-
-      if (!monthsMap[mKey]) {
-        monthsMap[mKey] = createMonthEntry(dt.getFullYear(), dt.getMonth() + 1);
+      if (it.isFeeInvoice || (it.paymentSummaryBillFeeInvoices && it.totalServiceFee) || (it.paymentCompletePeriodStartTime && it.totalServiceFee && !it.order_completed_period_start_time)) {
+        const s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
+        const mKey = it.monthKey || (s ? (() => {
+          const dt = parseEpochToGmt7(s);
+          return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+        })() : null);
+        if (mKey) feeInvoicesMap[mKey] = decScale(it.totalServiceFee);
       }
-      const mObj = monthsMap[mKey];
-      mObj.hasPayout = true;
-      mObj.days[dayNum] = (mObj.days[dayNum] || 0) + d.gross;
-      mObj.gross += d.gross;
-      mObj.mcn += d.mcn;
-      mObj.billTotal += d.billTotal;
-      mObj.wht10 += d.wht10;
-      mObj.vat += d.vat;
-      mObj.pit += d.pit;
-      mObj.fee += d.fee;
-      mObj.netPaid += d.net;
-      mObj.totalRecords++;
-      if (d.wht10 > 0) mObj.withWhtCount++;
-      if (d.vat > 0 || d.pit > 0) mObj.withVatCount++;
     }
 
-    // Pass 2: Billing List theo ngày hoàn thành đơn - luôn dựng bảng kê theo ngày,
-    // chỉ lấy tổng hợp tháng cho các tháng CHƯA có dữ liệu Payout Record.
+    // Pass 1: Billing List theo ngày hoàn thành đơn
     for (const it of rawBillingList) {
-      if (it.paymentPayout || it.payoutId || it.payoutCreatedTime) continue;
+      if (it.paymentPayout || it.payoutId || it.isFeeInvoice) continue;
       const s = it.order_completed_period_start_time;
       if (!s) continue;
       const dt = parseEpochToGmt7(s);
       const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
-
-      // Nếu tháng này đã có Payout Record, dùng số liệu chuẩn theo kỳ chi trả,
-      // bỏ qua để tránh cộng trùng doanh thu theo ngày (ngày phát sinh lấy từ kỳ chi trả).
-      if (payoutMonths.has(mKey)) continue;
-
       const dayNum = dt.getDate();
 
       if (!monthsMap[mKey]) {
@@ -669,19 +761,74 @@
           feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
         }
       }
+      if (feeAmt === 0 && billTotalAmt > 0 && (grossAmt - mcnAmt) > billTotalAmt) {
+        feeAmt = Math.round((grossAmt - mcnAmt) - billTotalAmt);
+      }
 
       mObj.days[dayNum] = (mObj.days[dayNum] || 0) + grossAmt;
       mObj.gross += grossAmt;
       mObj.mcn += mcnAmt;
       mObj.billTotal += billTotalAmt;
       mObj.wht10 += whtAmt;
-      mObj.pit += whtAmt; // fallback: giữ semantics cũ của trường wht cho các nhánh ước tính
+      mObj.pit += whtAmt;
       mObj.vat += vatAmt;
       mObj.fee += feeAmt;
       mObj.netPaid += billTotalAmt > 0 ? billTotalAmt : 0;
       mObj.totalRecords++;
       if (it.with_wht || whtAmt > 0) mObj.withWhtCount++;
       if (it.with_vat || vatAmt > 0) mObj.withVatCount++;
+    }
+
+    // Áp dụng số liệu Hóa đơn phí dịch vụ chính thức nếu có
+    for (const mKey of Object.keys(feeInvoicesMap)) {
+      if (monthsMap[mKey] && !monthsMap[mKey].hasPayout) {
+        monthsMap[mKey].fee = feeInvoicesMap[mKey];
+        monthsMap[mKey].billTotal = Math.max(0, monthsMap[mKey].gross - monthsMap[mKey].mcn - monthsMap[mKey].fee);
+        monthsMap[mKey].netPaid = monthsMap[mKey].billTotal;
+      }
+    }
+
+    // Pass 2: Payout Record theo từng kỳ chi trả thực tế
+    for (const it of rawBillingList) {
+      if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime)) continue;
+      if (it.isFeeInvoice) continue;
+      const p = it.paymentPayout || it;
+      const s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
+      if (!s) continue;
+      const dt = parseEpochToGmt7(s);
+      const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      const dayNum = dt.getDate();
+      const d = decomposePayout(it, mKey);
+
+      const isOctOnwards = mKey >= "2026-10";
+
+      // Trước 10/2026: giữ nguyên số liệu billing list đã khớp hóa đơn điện tử
+      if (!isOctOnwards && monthsMap[mKey] && monthsMap[mKey].totalRecords > 0 && !monthsMap[mKey].hasPayout) {
+        continue;
+      }
+
+      // Từ 10/2026: Payout Record là chuẩn đối soát tuyệt đối theo luật mới
+      if (isOctOnwards && (!monthsMap[mKey] || !monthsMap[mKey].hasPayout)) {
+        monthsMap[mKey] = createMonthEntry(dt.getFullYear(), dt.getMonth() + 1);
+        monthsMap[mKey].hasPayout = true;
+      } else if (!monthsMap[mKey]) {
+        monthsMap[mKey] = createMonthEntry(dt.getFullYear(), dt.getMonth() + 1);
+        monthsMap[mKey].hasPayout = true;
+      }
+
+      const mObj = monthsMap[mKey];
+      mObj.days[dayNum] = (mObj.days[dayNum] || 0) + d.gross;
+      mObj.gross += d.gross;
+      mObj.mcn += d.mcn;
+      mObj.billTotal += d.billTotal;
+      mObj.wht10 += d.wht10;
+      mObj.vat += d.vat;
+      mObj.pit += d.pit;
+      mObj.fee += d.fee;
+      mObj.netPaid += d.net;
+      mObj.totalRecords++;
+      if (d.wht10 > 0) mObj.withWhtCount++;
+      if (d.vat > 0 || d.pit > 0) mObj.withVatCount++;
     }
 
     return monthsMap;
