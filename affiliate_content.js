@@ -82,6 +82,65 @@
         }
       }
 
+      // 1. Thử gọi API getPaymentPayoutBillingList (GraphQL) từ trang payout_record
+      try {
+        const gqlRes = await fetch("/api/v3/gql?q=getPayoutList", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify({
+            operationName: "getPaymentPayoutBillingList",
+            query: `
+              query getPaymentPayoutBillingList($pageSize: Int, $pageNum: Int) {
+                getPaymentPayoutBillingList(pageSize: $pageSize, pageNum: $pageNum) {
+                  payoutList {
+                    payoutDisplayVersion
+                    paymentPayout {
+                      accountType
+                      eligibleTotalAmount
+                      payoutCreatedTime
+                      payoutId
+                      totalPaymentAmount
+                      payoutPaymentStatus
+                      paidFailedReasonType
+                      payArrivalTime
+                      transferredToOffline
+                      cancelReason
+                      cancelType
+                      closeReason
+                    }
+                    payoutInvoice
+                    payoutExternalInfo {
+                      mergeInvoiceStatus
+                      serviceFeeInvoiceStatus
+                    }
+                  }
+                  payoutTotalAmount
+                  payoutBreakdown
+                  pagination {
+                    pageNum
+                    pageSize
+                    totalCount
+                  }
+                }
+              }
+            `,
+            variables: { pageSize: 100, pageNum: 1 }
+          })
+        });
+        const gqlJson = await gqlRes.json();
+        const pList = gqlJson.data?.getPaymentPayoutBillingList?.payoutList;
+        if (Array.isArray(pList) && pList.length > 0) {
+          chrome.storage.local.set({
+            [STORAGE_KEY]: {
+              updatedAt: Date.now(),
+              list: pList
+            }
+          });
+          return;
+        }
+      } catch (_) {}
+
+      // 2. Fallback sang billing_list nếu không gọi được GraphQL
       const currentYear = new Date().getFullYear();
       const s = Math.floor(new Date(`${currentYear}-01-01T00:00:00+07:00`).getTime() / 1000);
       const e = Math.floor(new Date(`${currentYear}-12-31T23:59:59+07:00`).getTime() / 1000);

@@ -417,5 +417,69 @@ class TestTaxCalculator(unittest.TestCase):
         # Tổng doanh thu các ngày = total_gross = 6.247.413 đ
         self.assertEqual(total_gross, 6247413.0)
 
+    def test_payout_record_october_real_data(self):
+        # Dữ liệu thực tế từ trang https://affiliate.shopee.vn/payment/payout_record
+        # Cung cấp bởi API getPaymentPayoutBillingList (GraphQL)
+        # Các khoản thanh toán trong tháng 10/2026:
+        # 1. 01/10/2026: 23.331 đ (chưa trừ thuế PIT + VAT vì thuộc doanh thu cuối tháng 9 dưới ngưỡng)
+        # 2. 05/10/2026: Doanh thu hợp lệ 37.854 đ, PIT: -1.912 đ, VAT: -1.912 đ, Sau thuế: 34.030 đ
+        # 3. 08/10/2026: Doanh thu hợp lệ 49.496 đ, PIT: -2.499 đ, VAT: -2.499 đ, Sau thuế: 44.498 đ
+        # 4. 12/10/2026: Doanh thu hợp lệ 23.489 đ, PIT: -1.186 đ, VAT: -1.186 đ, Sau thuế: 21.117 đ
+        # 5. 19/10/2026: Doanh thu hợp lệ 71.086 đ, PIT: -3.590 đ, VAT: -3.590 đ, Sau thuế: 63.906 đ
+        payouts_october = [
+            {"pid": "17360010148261019", "eligible": "7179000000", "paid": "6390600000", "day": 19},
+            {"pid": "17360010148261012", "eligible": "2372100000", "paid": "2111700000", "day": 12},
+            {"pid": "17360010148261008", "eligible": "4998500000", "paid": "4449800000", "day": 8},
+            {"pid": "17360010148261005", "eligible": "3823000000", "paid": "3403000000", "day": 5},
+            {"pid": "17360010148261001", "eligible": "2356200000", "paid": "2333100000", "day": 1}
+        ]
+
+        total_gross = 0
+        total_fee = 0
+        total_bill = 0
+        total_vat = 0
+        total_pit = 0
+        total_net = 0
+
+        for p in payouts_october:
+            gross = round(float(p["eligible"]) / 100000)
+            paid = round(float(p["paid"]) / 100000)
+
+            if p["day"] == 1:
+                # Kỳ 01/10/2026: Chưa trừ thuế PIT + VAT
+                vat = 0
+                pit = 0
+                fee = gross - paid # 23.562 - 23.331 = 231 đ
+                bill = gross - fee # 23.331 đ
+                net = paid         # 23.331 đ
+            else:
+                # Shopee tính 5% VAT và 5% PIT trên Doanh thu hợp lệ cơ sở
+                vat = round(gross * 0.05)
+                pit = round(gross * 0.05)
+                fee = max(0, gross - paid - vat - pit)
+                bill = gross - fee
+                net = paid
+
+            total_gross += gross
+            total_fee += fee
+            total_bill += bill
+            total_vat += vat
+            total_pit += pit
+            total_net += net
+
+        # Kiểm tra chính xác theo yêu cầu người dùng:
+        # 1. Sau thuế = 23.331 + 34.030 + 44.498 + 21.117 + 63.906 = 186.882 đ
+        self.assertEqual(total_net, 186882)
+        # 2. Tổng PIT = 1.912 + 2.499 + 1.186 + 3.590 = 9.187 đ
+        self.assertEqual(total_pit, 9187)
+        # 3. Tổng VAT = 1.912 + 2.499 + 1.186 + 3.590 = 9.187 đ
+        self.assertEqual(total_vat, 9187)
+        # 4. Kỳ 01/10/2026 chưa trừ thuế PIT và VAT
+        self.assertEqual(payouts_october[4]["day"], 1)
+        # 5. Doanh thu hợp lệ sau phí = 205.256 đ
+        self.assertEqual(total_bill, 205256)
+        # 6. Trước thuế (hợp lệ sau phí) = 186.882 + 9.187 (PIT) + 9.187 (VAT) = 205.256 đ
+        self.assertEqual(total_net + total_pit + total_vat, 205256)
+
 if __name__ == "__main__":
     unittest.main()

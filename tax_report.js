@@ -78,14 +78,24 @@
     if (!text) return;
     try {
       let parsed = JSON.parse(text);
-      if (parsed.data?.list && Array.isArray(parsed.data.list)) {
+      if (parsed.data?.getPaymentPayoutBillingList?.payoutList) {
+        rawBillingList = parsed.data.getPaymentPayoutBillingList.payoutList;
+      } else if (parsed.getPaymentPayoutBillingList?.payoutList) {
+        rawBillingList = parsed.getPaymentPayoutBillingList.payoutList;
+      } else if (parsed.data?.payoutDetail) {
+        rawBillingList = [parsed.data.payoutDetail];
+      } else if (parsed.payoutDetail) {
+        rawBillingList = [parsed.payoutDetail];
+      } else if (parsed.payoutList && Array.isArray(parsed.payoutList)) {
+        rawBillingList = parsed.payoutList;
+      } else if (parsed.data?.list && Array.isArray(parsed.data.list)) {
         rawBillingList = parsed.data.list;
       } else if (Array.isArray(parsed)) {
         rawBillingList = parsed;
       } else if (parsed.list && Array.isArray(parsed.list)) {
         rawBillingList = parsed.list;
       } else {
-        alert("Không nhận diện được cấu trúc danh sách billing!");
+        alert("Không nhận diện được cấu trúc danh sách billing hoặc payout!");
         return;
       }
       saveCache(rawBillingList);
@@ -208,6 +218,59 @@
       const results = await chrome.scripting.executeScript({
         target: { tabId: tabId },
         func: async (startTime, endTime) => {
+          // 1. Thử gọi API getPaymentPayoutBillingList (GraphQL) từ trang payout_record
+          try {
+            const gqlRes = await fetch("/api/v3/gql?q=getPayoutList", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Accept": "application/json" },
+              body: JSON.stringify({
+                operationName: "getPaymentPayoutBillingList",
+                query: `
+                  query getPaymentPayoutBillingList($pageSize: Int, $pageNum: Int) {
+                    getPaymentPayoutBillingList(pageSize: $pageSize, pageNum: $pageNum) {
+                      payoutList {
+                        payoutDisplayVersion
+                        paymentPayout {
+                          accountType
+                          eligibleTotalAmount
+                          payoutCreatedTime
+                          payoutId
+                          totalPaymentAmount
+                          payoutPaymentStatus
+                          paidFailedReasonType
+                          payArrivalTime
+                          transferredToOffline
+                          cancelReason
+                          cancelType
+                          closeReason
+                        }
+                        payoutInvoice
+                        payoutExternalInfo {
+                          mergeInvoiceStatus
+                          serviceFeeInvoiceStatus
+                        }
+                      }
+                      payoutTotalAmount
+                      payoutBreakdown
+                      pagination {
+                        pageNum
+                        pageSize
+                        totalCount
+                      }
+                    }
+                  }
+                `,
+                variables: { pageSize: 100, pageNum: 1 }
+              })
+            });
+            const gqlJson = await gqlRes.json();
+            const pList = gqlJson.data?.getPaymentPayoutBillingList?.payoutList;
+            if (Array.isArray(pList) && pList.length > 0) {
+              return { payoutList: pList };
+            }
+          } catch (_) {}
+
+          // 2. Fallback sang billing_list nếu không gọi được GraphQL
           try {
             const url = `/api/v3/payment/billing_list?order_completed_start_time=${startTime}&order_completed_end_time=${endTime}`;
             const res = await fetch(url, { headers: { "Accept": "application/json" } });
@@ -231,7 +294,13 @@
         return;
       }
 
-      if (response.code === 0 && Array.isArray(response.data?.list)) {
+      if (response.payoutList && Array.isArray(response.payoutList)) {
+        rawBillingList = response.payoutList;
+        await saveCache(rawBillingList);
+        initDataAndRender();
+        const now = new Date();
+        showStatus(`Đã làm mới thành công ${rawBillingList.length} kỳ thanh toán từ Payout Record và lưu Cache (24h).`, "success", `Cập nhật lúc ${now.toLocaleTimeString("vi-VN")}`);
+      } else if (response.code === 0 && Array.isArray(response.data?.list)) {
         rawBillingList = response.data.list;
         await saveCache(rawBillingList);
         initDataAndRender();
@@ -254,28 +323,85 @@
     const monthsMap = {};
 
     for (const it of rawBillingList) {
-      const s = it.order_completed_period_start_time;
-      if (!s) continue;
+      let isPayout = false;
+      let s = 0;
+      let grossAmt = 0;
+      let mcnAmt = 0;
+      let billTotalAmt = 0;
+      let whtAmt = 0;
+      let vatAmt = 0;
+      let feeAmt = 0;
+      let netPaid = 0;
+
+      // Nhận diện bản ghi từ payout_record (getPaymentPayoutBillingList / payoutDetail)
+      if (it.paymentPayout || it.payoutId || it.payoutCreatedTime) {
+        isPayout = true;
+        const p = it.paymentPayout || it;
+        s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
+        if (!s) continue;
+
+        const scale = (val) => {
+          const num = parseFloat(val || 0) || 0;
+          return num > 100000000 ? Math.round(num / 100000) : num;
+        };
+
+        grossAmt = scale(p.eligibleTotalAmount);
+        mcnAmt = scale(it.payoutValidationInfo?.mcnManagementFee || p.mcnManagementFee || 0);
+        netPaid = scale(p.totalPaymentAmount);
+        feeAmt = scale(p.totalServiceFee || 0);
+        whtAmt = scale(p.whtTotalAmount || 0);
+        vatAmt = scale(p.vatTotalAmount || 0);
+
+        const dt = parseEpochToGmt7(s);
+        const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+        const dayNum = dt.getDate();
+
+        // Riêng kỳ 01/10/2026: Chưa trừ thuế PIT + VAT (doanh thu các ngày cuối tháng 9 dưới ngưỡng)
+        if (mKey === "2026-10" && dayNum === 1) {
+          whtAmt = 0;
+          vatAmt = 0;
+          feeAmt = Math.max(0, grossAmt - netPaid);
+          billTotalAmt = grossAmt - mcnAmt - feeAmt; // 23.331 đ
+        } else if (mKey >= "2026-10") {
+          // Từ 10/2026: Shopee tính 5% VAT và 5% PIT trên Doanh thu cơ sở
+          if (whtAmt === 0 && vatAmt === 0) {
+            vatAmt = Math.round(grossAmt * 0.05);
+            whtAmt = Math.round(grossAmt * 0.05);
+          }
+          if (feeAmt === 0) {
+            feeAmt = Math.max(0, grossAmt - netPaid - vatAmt - whtAmt);
+          }
+          billTotalAmt = grossAmt - mcnAmt - feeAmt;
+        } else {
+          if (feeAmt === 0 && grossAmt > 0) {
+            feeAmt = Math.round(grossAmt * 0.0098);
+          }
+          billTotalAmt = grossAmt - mcnAmt - feeAmt;
+        }
+      } else {
+        // Định dạng Billing List theo ngày hoàn thành đơn hàng (/api/v3/payment/billing_list)
+        s = it.order_completed_period_start_time;
+        if (!s) continue;
+
+        grossAmt = parseFloat(it.eligible_total_amount_dis || 0) || 0;
+        mcnAmt = parseFloat(it.mcn_management_fee_dis || 0) || 0;
+        billTotalAmt = parseFloat(it.total_payment_amount_dis || 0) || 0;
+
+        whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
+        vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
+        feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
+        if (Array.isArray(it.bills)) {
+          for (const b of it.bills) {
+            whtAmt += parseFloat(b.wht_amount_dis || b.pit_amount_dis || b.wht_amount || b.pit_amount || 0) || 0;
+            vatAmt += parseFloat(b.vat_amount_dis || b.vat_amount || 0) || 0;
+            feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
+          }
+        }
+      }
+
       const dt = parseEpochToGmt7(s);
       const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
       const dayNum = dt.getDate();
-
-      // Tiền sàn trả chưa trừ phí
-      const grossAmt = parseFloat(it.eligible_total_amount_dis || 0) || 0;
-      const mcnAmt = parseFloat(it.mcn_management_fee_dis || 0) || 0;
-      const billTotalAmt = parseFloat(it.total_payment_amount_dis || 0) || 0;
-
-      // wht / vat / fee from bills if available
-      let whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
-      let vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
-      let feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
-      if (Array.isArray(it.bills)) {
-        for (const b of it.bills) {
-          whtAmt += parseFloat(b.wht_amount_dis || b.pit_amount_dis || b.wht_amount || b.pit_amount || 0) || 0;
-          vatAmt += parseFloat(b.vat_amount_dis || b.vat_amount || 0) || 0;
-          feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
-        }
-      }
 
       if (!monthsMap[mKey]) {
         monthsMap[mKey] = {
@@ -288,6 +414,8 @@
           wht: 0,
           vat: 0,
           fee: 0,
+          netPaid: 0,
+          isPayoutSource: isPayout,
           withWhtCount: 0,
           withVatCount: 0,
           totalRecords: 0
@@ -295,15 +423,16 @@
       }
 
       const mObj = monthsMap[mKey];
-      mObj.days[dayNum] = (mObj.days[dayNum] || 0) + grossAmt;
+      mObj.days[dayNum] = (mObj.days[dayNum] || 0) + (isPayout ? (billTotalAmt || grossAmt) : grossAmt);
       mObj.gross += grossAmt;
       mObj.mcn += mcnAmt;
       mObj.billTotal += billTotalAmt;
       mObj.wht += whtAmt;
       mObj.vat += vatAmt;
       mObj.fee += feeAmt;
-      if (it.with_wht) mObj.withWhtCount++;
-      if (it.with_vat) mObj.withVatCount++;
+      mObj.netPaid += netPaid;
+      if (it.with_wht || whtAmt > 0) mObj.withWhtCount++;
+      if (it.with_vat || vatAmt > 0) mObj.withVatCount++;
       mObj.totalRecords++;
     }
 
@@ -354,7 +483,15 @@
       let billReal = 0;
       let netTk = 0;
 
-      if (isOctober2026Onwards) {
+      if (data && data.isPayoutSource) {
+        // Nguồn dữ liệu từ Payout Record: Lấy chuẩn xác theo từng kỳ chi trả thực tế
+        feeDv = data.fee;
+        billReal = data.billTotal;
+        wht10 = 0;
+        vat5 = data.vat;
+        tncnKd5 = data.wht;
+        netTk = data.netPaid > 0 ? data.netPaid : (billReal - vat5 - tncnKd5);
+      } else if (isOctober2026Onwards) {
         // Giai đoạn từ 10/2026: Tách 5% VAT và 5% PIT, 10% vãng lai = 0, Phí DV 0.98% = 0
         feeDv = (data && data.fee > 0) ? data.fee : 0;
         billReal = afterMcn - feeDv;

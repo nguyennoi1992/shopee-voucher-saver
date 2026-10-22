@@ -124,6 +124,30 @@ Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee 
      * `service_fee_invoice`: Là **kho chứng từ thuế** (Tax Accounting), phục vụ cho Publisher làm Hộ kinh doanh hoặc Doanh nghiệp lấy hóa đơn đầu vào để hạch toán chi phí hợp lý khi quyết toán thuế.
    * Do đó, hệ thống không trừ thêm một lần nữa trên `payout_record` để tránh trừ trùng hai lần tiền phí.
 
+### 3.4. Phân biệt Dữ liệu Payout Record (Ngày thanh toán) và Billing List (Ngày hoàn thành đơn)
+
+Extension hỗ trợ đồng bộ và nhận diện tự động cả 2 nguồn dữ liệu chính từ Shopee Affiliate:
+
+1. **Theo Lịch sử thanh toán (`payment/payout_record` - Khuyên dùng cho Sổ tay thuế & Tiền về TK)**:
+   * **Nguồn API**: GraphQL `getPaymentPayoutBillingList` (`/api/v3/gql?q=getPayoutList`) hoặc chi tiết từng bill `getPayoutDetail`.
+   * **Bản chất**: Phản ánh chính xác **dòng tiền thực nhận về tài khoản ngân hàng** theo thời điểm chi trả (`payoutCreatedTime` / `payArrivalTime`).
+   * **Thực tế tháng 10/2026 (5 kỳ thanh toán)**:
+     * **Kỳ 01-10-2026** (Mã `...1001`): Thực nhận **23.331 đ** (Doanh thu các ngày cuối tháng 9 dưới ngưỡng khấu trừ, **chưa trừ thuế PIT và VAT -> Thuế = 0 đ**).
+     * **Kỳ 05-10-2026** (Mã `...1005`): Doanh thu hợp lệ 37.854 đ, **5% VAT: -1.912 đ, 5% PIT: -1.912 đ**, Thực nhận: **34.030 đ**.
+     * **Kỳ 08-10-2026** (Mã `...1008`): Doanh thu hợp lệ 49.496 đ, **5% VAT: -2.499 đ, 5% PIT: -2.499 đ**, Thực nhận: **44.498 đ**.
+     * **Kỳ 12-10-2026** (Mã `...1012`): Doanh thu hợp lệ 23.489 đ, **5% VAT: -1.186 đ, 5% PIT: -1.186 đ**, Thực nhận: **21.117 đ**.
+     * **Kỳ 19-10-2026** (Mã `...1019`): Doanh thu hợp lệ 71.086 đ, **5% VAT: -3.590 đ, 5% PIT: -3.590 đ**, Thực nhận: **63.906 đ**.
+     * **Tổng Sau thuế (Thực nhận về TK)** = `23.331 + 34.030 + 44.498 + 21.117 + 63.906` = **186.882 đ**.
+     * **Tổng Thuế PIT (TNCN)** = `0 + 1.912 + 2.499 + 1.186 + 3.590` = **9.187 đ**.
+     * **Tổng Thuế VAT (GTGT)** = `0 + 1.912 + 2.499 + 1.186 + 3.590` = **9.187 đ**.
+     * **Tổng 2 khoản thuế** = `9.187 + 9.187` = **18.374 đ**.
+     * **Tổng doanh thu hợp lệ trước thuế** = `186.882 + 18.374` = **205.256 đ** *(Lưu ý: Nếu chỉ cộng 1 khoản thuế 9.187 như nháp nhanh thì ra 196.069 đ, nhưng thực tế Shopee khấu trừ cả VAT 9.187 đ và PIT 9.187 đ nên tổng trước thuế chuẩn kế toán là 205.256 đ)*.
+     * **Tổng tiền sàn trả cơ sở (Gross)** = **207.288 đ** *(trước phí dịch vụ sàn 0.98% là 2.032 đ)*.
+
+2. **Theo Ngày hoàn thành đơn hàng (`payment/billing` - Khuyên dùng cho Kê khai ngày phát sinh)**:
+   * **Nguồn API**: `/api/v3/payment/billing_list` lọc theo `order_completed_period_start_time`.
+   * **Bản chất**: Phản ánh ngày phát sinh hoa hồng từ đơn hàng thực tế của người mua (Ngày 1, 2, ..., 31) để xuất file Excel/CSV kê khai thuế theo ngày.
+
 ---
 
 ## 4. Cấu trúc file xuất (Excel & CSV)

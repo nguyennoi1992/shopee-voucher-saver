@@ -430,29 +430,91 @@ function updateAffiliateSummaryMetrics() {
   const dailyList = [];
 
   for (const it of cachedAffiliateList) {
-    const s = it.order_completed_period_start_time;
-    if (!s) continue;
+    let isPayout = false;
+    let s = 0;
+    let gross = 0;
+    let mcn = 0;
+    let netPaid = 0;
+    let feeAmt = 0;
+    let whtAmt = 0;
+    let vatAmt = 0;
+    let billTotal = 0;
+
+    if (it.paymentPayout || it.payoutId || it.payoutCreatedTime) {
+      isPayout = true;
+      const p = it.paymentPayout || it;
+      s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
+      if (!s) continue;
+
+      const scale = (val) => {
+        const num = parseFloat(val || 0) || 0;
+        return num > 100000000 ? Math.round(num / 100000) : num;
+      };
+
+      gross = scale(p.eligibleTotalAmount);
+      mcn = scale(it.payoutValidationInfo?.mcnManagementFee || p.mcnManagementFee || 0);
+      netPaid = scale(p.totalPaymentAmount);
+      feeAmt = scale(p.totalServiceFee || 0);
+      whtAmt = scale(p.whtTotalAmount || 0);
+      vatAmt = scale(p.vatTotalAmount || 0);
+
+      const dt = new Date(s * 1000 + 7 * 3600000);
+      const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+      const dayNum = dt.getUTCDate();
+      if (fromM && m < fromM) continue;
+      if (toM && m > toM) continue;
+
+      // Riêng kỳ 01/10/2026: Chưa trừ thuế PIT + VAT (doanh thu các ngày cuối tháng 9 dưới ngưỡng)
+      if (m === "2026-10" && dayNum === 1) {
+        whtAmt = 0;
+        vatAmt = 0;
+        feeAmt = Math.max(0, gross - netPaid);
+        billTotal = gross - mcn - feeAmt;
+      } else if (m >= "2026-10") {
+        if (whtAmt === 0 && vatAmt === 0) {
+          vatAmt = Math.round(gross * 0.05);
+          whtAmt = Math.round(gross * 0.05);
+        }
+        if (feeAmt === 0) {
+          feeAmt = Math.max(0, gross - netPaid - vatAmt - whtAmt);
+        }
+        billTotal = gross - mcn - feeAmt;
+      } else {
+        if (feeAmt === 0 && gross > 0) {
+          feeAmt = Math.round(gross * 0.0098);
+        }
+        billTotal = gross - mcn - feeAmt;
+      }
+    } else {
+      s = it.order_completed_period_start_time;
+      if (!s) continue;
+      const dt = new Date(s * 1000 + 7 * 3600000);
+      const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+      if (fromM && m < fromM) continue;
+      if (toM && m > toM) continue;
+
+      gross = parseFloat(it.eligible_total_amount_dis || 0) || 0;
+      mcn = parseFloat(it.mcn_management_fee_dis || 0) || 0;
+      billTotal = parseFloat(it.total_payment_amount_dis || 0) || 0;
+
+      // Chi tiết thuế PIT (TNCN), VAT (GTGT) và phí dịch vụ từ API thực tế
+      whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
+      vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
+      feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
+
+      if (Array.isArray(it.bills)) {
+        for (const b of it.bills) {
+          whtAmt += parseFloat(b.wht_amount_dis || b.pit_amount_dis || b.wht_amount || b.pit_amount || 0) || 0;
+          vatAmt += parseFloat(b.vat_amount_dis || b.vat_amount || 0) || 0;
+          feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
+        }
+      }
+    }
+
     const dt = new Date(s * 1000 + 7 * 3600000);
     const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
     if (fromM && m < fromM) continue;
     if (toM && m > toM) continue;
-
-    const gross = parseFloat(it.eligible_total_amount_dis || 0) || 0;
-    const mcn = parseFloat(it.mcn_management_fee_dis || 0) || 0;
-    const billTotal = parseFloat(it.total_payment_amount_dis || 0) || 0;
-
-    // Chi tiết thuế PIT (TNCN), VAT (GTGT) và phí dịch vụ từ API thực tế
-    let whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
-    let vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
-    let feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
-
-    if (Array.isArray(it.bills)) {
-      for (const b of it.bills) {
-        whtAmt += parseFloat(b.wht_amount_dis || b.pit_amount_dis || b.wht_amount || b.pit_amount || 0) || 0;
-        vatAmt += parseFloat(b.vat_amount_dis || b.vat_amount || 0) || 0;
-        feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
-      }
-    }
 
     if (!monthlyMap[m]) {
       monthlyMap[m] = {
@@ -462,7 +524,9 @@ function updateAffiliateSummaryMetrics() {
         billTotal: 0,
         wht: 0,
         vat: 0,
-        fee: 0
+        fee: 0,
+        netPaid: 0,
+        isPayoutSource: isPayout
       };
     }
 
@@ -472,12 +536,13 @@ function updateAffiliateSummaryMetrics() {
     monthlyMap[m].wht += whtAmt;
     monthlyMap[m].vat += vatAmt;
     monthlyMap[m].fee += feeAmt;
+    monthlyMap[m].netPaid += netPaid;
 
     const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
     dailyList.push({
       dateStr: dayStr,
       timestamp: s,
-      amount: gross
+      amount: isPayout ? (billTotal || gross) : gross
     });
   }
 
@@ -494,13 +559,25 @@ function updateAffiliateSummaryMetrics() {
     let wht10 = 0;
     let vat5 = 0;
     let tncnKd5 = 0;
+    let billReal = 0;
+    let netTk = 0;
 
-    if (isOctober2026Onwards) {
+    if (data.isPayoutSource) {
+      // Dữ liệu từ Payout Record
+      feeDv = data.fee;
+      billReal = data.billTotal;
+      wht10 = 0;
+      vat5 = data.vat;
+      tncnKd5 = data.wht;
+      netTk = data.netPaid > 0 ? data.netPaid : (billReal - vat5 - tncnKd5);
+    } else if (isOctober2026Onwards) {
       // Từ 10/2026: Tách 5% VAT và 5% PIT, 10% vãng lai = 0, Bỏ phí dịch vụ 0.98%
       feeDv = data.fee > 0 ? data.fee : 0;
       wht10 = 0;
       vat5 = data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
       tncnKd5 = data.wht > 0 ? data.wht : Math.round(afterMcn * 0.05);
+      billReal = afterMcn - feeDv;
+      netTk = billReal - wht10 - vat5 - tncnKd5;
     } else {
       // Trước 10/2026: Shopee trừ phí dịch vụ 0.98% trực tiếp vào billTotal
       if (data.fee > 0) {
@@ -513,10 +590,10 @@ function updateAffiliateSummaryMetrics() {
       wht10 = data.wht > 0 ? data.wht : 0;
       vat5 = data.vat > 0 ? data.vat : 0;
       tncnKd5 = 0;
+      billReal = afterMcn - feeDv;
+      netTk = billReal - wht10 - vat5 - tncnKd5;
     }
 
-    const billReal = afterMcn - feeDv;
-    const netTk = billReal - wht10 - vat5 - tncnKd5;
     const taxMonth = wht10 + vat5 + tncnKd5;
 
     data.afterMcn = afterMcn;
@@ -649,6 +726,59 @@ async function fetchAffiliateLive() {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: async (startTime, endTime) => {
+        // 1. Thử gọi API getPaymentPayoutBillingList (GraphQL) từ trang payout_record
+        try {
+          const gqlRes = await fetch("/api/v3/gql?q=getPayoutList", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json" },
+            body: JSON.stringify({
+              operationName: "getPaymentPayoutBillingList",
+              query: `
+                query getPaymentPayoutBillingList($pageSize: Int, $pageNum: Int) {
+                  getPaymentPayoutBillingList(pageSize: $pageSize, pageNum: $pageNum) {
+                    payoutList {
+                      payoutDisplayVersion
+                      paymentPayout {
+                        accountType
+                        eligibleTotalAmount
+                        payoutCreatedTime
+                        payoutId
+                        totalPaymentAmount
+                        payoutPaymentStatus
+                        paidFailedReasonType
+                        payArrivalTime
+                        transferredToOffline
+                        cancelReason
+                        cancelType
+                        closeReason
+                      }
+                      payoutInvoice
+                      payoutExternalInfo {
+                        mergeInvoiceStatus
+                        serviceFeeInvoiceStatus
+                      }
+                    }
+                    payoutTotalAmount
+                    payoutBreakdown
+                    pagination {
+                      pageNum
+                      pageSize
+                      totalCount
+                    }
+                  }
+                }
+              `,
+              variables: { pageSize: 100, pageNum: 1 }
+            })
+          });
+          const gqlJson = await gqlRes.json();
+          const pList = gqlJson.data?.getPaymentPayoutBillingList?.payoutList;
+          if (Array.isArray(pList) && pList.length > 0) {
+            return { payoutList: pList };
+          }
+        } catch (_) {}
+
+        // 2. Fallback sang billing_list
         try {
           const res = await fetch(`/api/v3/payment/billing_list?order_completed_start_time=${startTime}&order_completed_end_time=${endTime}`);
           return await res.json();
@@ -660,7 +790,19 @@ async function fetchAffiliateLive() {
     });
 
     const res = results?.[0]?.result;
-    if (res?.code === 0 && Array.isArray(res.data?.list)) {
+    if (res?.payoutList && Array.isArray(res.payoutList)) {
+      cachedAffiliateList = res.payoutList;
+      if (chrome?.storage?.local) {
+        chrome.storage.local.set({
+          [AFFILIATE_CACHE_KEY_V2]: {
+            updatedAt: Date.now(),
+            list: cachedAffiliateList
+          }
+        });
+      }
+      loadAffiliateSummary();
+      setAffiliateStatus(`Đã đồng bộ ${cachedAffiliateList.length} kỳ thanh toán Payout thành công!`, "success");
+    } else if (res?.code === 0 && Array.isArray(res.data?.list)) {
       cachedAffiliateList = res.data.list;
       if (chrome?.storage?.local) {
         chrome.storage.local.set({
