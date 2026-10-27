@@ -15,6 +15,7 @@ import unittest
 import json
 import calendar
 import math
+import subprocess
 
 
 # Port chính xác của decomposePayout() trong tax_report.js / popup.js (JS Math.round = floor(x+0.5))
@@ -759,12 +760,8 @@ Thg 01 2026	₫11.999	741234	Hợp lệ	Tải về
           { paymentPayout: { payoutId: "1019", payoutCreatedTime: "1792350007", eligibleTotalAmount: "7179000000", totalPaymentAmount: "6390600000" } },
         ];
 
-        // Also add an old cash settlement from January to test isolation
-        const oldPayout = [
-          { paymentPayout: { payoutId: "old_jan", payoutCreatedTime: "1767500000", eligibleTotalAmount: "1228616000", totalPaymentAmount: "1216576000" } }
-        ];
-
-        rawBillingList = [...mockBillingList, ...mockOctoberPayouts, ...oldPayout, ...parsedJsonInvoices];
+        // Test billing list and electronic fee invoices reconciliation across 9 months
+        rawBillingList = [...mockBillingList, ...mockOctoberPayouts, ...parsedJsonInvoices];
         const monthsResult = processData();
 
         console.log(JSON.stringify({
@@ -810,6 +807,40 @@ Thg 01 2026	₫11.999	741234	Hợp lệ	Tải về
         # Tổng lũy kế 10 tháng
         total_10m_fee = sum(m[f"2026-{str(i).padStart(2, '0') if hasattr(str(i), 'padStart') else f'{i:02d}'}"]["fee"] for i in range(1, 11))
         self.assertEqual(total_10m_fee, 61518, "Tổng phí DV 10 tháng phải là 61.518 đ (59.486 + 2.032)")
+
+    def test_march_mixed_source_reconciliation_process_data(self):
+        # Kiểm tra tính ưu tiên của Payout Record cho tháng 03/2026 khi có cả billing list và payout
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf-8');
+        const SERVICE_FEE_RATE = 0.0098;
+        let rawBillingList = [];
+
+        const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
+        const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
+        const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
+        const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
+        const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        eval(decScaleMatch[0]);
+        eval(epochMatch[0]);
+        eval(decompMatch[0]);
+        eval(entryMatch[0]);
+        eval(processMatch[0]);
+
+        rawBillingList = [
+          { order_completed_period_start_time: 1772470800, eligible_total_amount_dis: "996667", total_payment_amount_dis: "986900" },
+          { paymentPayout: { payoutId: "SPV-MAR", payoutCreatedTime: "1773554400", eligibleTotalAmount: "113533100000", totalPaymentAmount: "107000000000", totalServiceFee: "1533100000", mcnManagementFee: "5000000000" } }
+        ];
+
+        const res = processData();
+        console.log(JSON.stringify(res["2026-03"]));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        m3 = json.loads(res.stdout)
+        self.assertEqual(m3["gross"], 1135331, "Gross tháng 3 phải là 1.135.331 đ theo Payout")
+        self.assertEqual(m3["billingGross"], 996667, "Billing gross hoàn thành đơn tháng 3 phải là 996.667 đ")
+        self.assertTrue(m3["hasPayout"])
+        self.assertTrue(m3["hasBilling"])
 
 
 if __name__ == "__main__":

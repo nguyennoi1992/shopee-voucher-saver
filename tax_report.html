@@ -435,6 +435,331 @@
       gap: 10px;
       margin-top: 16px;
     }
+
+    /* S1a-HKD Circular 152/2025/TT-BTC Styles */
+    .s1a-controls {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .s1a-form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .s1a-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .s1a-field label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .s1a-field input,
+    .s1a-field select {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13.5px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    .s1a-field input:focus,
+    .s1a-field select:focus {
+      border-color: var(--primary);
+    }
+
+    .s1a-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px dashed var(--border);
+    }
+
+    .s1a-source-note {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .s1a-notice {
+      font-size: 12.5px;
+      color: var(--muted);
+      line-height: 1.45;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #f1f2f6;
+    }
+
+    .s1a-sheet-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 40px;
+    }
+
+    .s1a-sheet {
+      background: #ffffff;
+      color: #000000;
+      border: 1px solid #cbd5e0;
+      border-radius: 4px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+      width: 100%;
+      max-width: 840px;
+      padding: 42px 48px;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 14px;
+      line-height: 1.45;
+      box-sizing: border-box;
+    }
+
+    .s1a-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+    }
+
+    .s1a-taxpayer-col {
+      flex: 1;
+      min-width: 0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .s1a-taxpayer-col div {
+      margin-bottom: 3px;
+    }
+
+    .s1a-meta-col {
+      text-align: right;
+      font-size: 13px;
+      line-height: 1.35;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .s1a-title-section {
+      text-align: center;
+      margin: 22px 0 12px;
+    }
+
+    .s1a-main-title {
+      font-size: 17px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 6px 0;
+    }
+
+    .s1a-sub-info {
+      font-size: 13.5px;
+      margin-bottom: 3px;
+      word-break: break-word;
+    }
+
+    .s1a-unit {
+      text-align: right;
+      font-style: italic;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    table.s1a-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 24px;
+      font-family: "Times New Roman", Times, serif;
+      font-size: 13.5px;
+    }
+
+    table.s1a-table th,
+    table.s1a-table td {
+      border: 1px solid #000000;
+      padding: 8px 10px;
+      color: #000000;
+      background-color: #fff;
+    }
+
+    table.s1a-table th {
+      text-align: center;
+      font-weight: 700;
+      background-color: #fdfdfd;
+    }
+
+    table.s1a-table tr.s1a-subcol th {
+      font-weight: 400;
+      font-size: 12px;
+      padding: 4px;
+    }
+
+    table.s1a-table td.col-s1a-date {
+      text-align: center;
+      white-space: nowrap;
+      width: 130px;
+    }
+
+    table.s1a-table td.col-s1a-desc {
+      text-align: left;
+      word-break: break-word;
+    }
+
+    table.s1a-table td.col-s1a-amt {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      width: 150px;
+    }
+
+    table.s1a-table tfoot td {
+      font-weight: 700;
+      background-color: #fff !important;
+      border-top: 2px solid #000000;
+    }
+
+    .s1a-sign-container {
+      margin-top: 24px;
+      display: flex;
+      justify-content: flex-end;
+      page-break-inside: avoid;
+    }
+
+    .s1a-sign-box {
+      width: 340px;
+      max-width: 100%;
+      text-align: center;
+      font-family: "Times New Roman", Times, serif;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    .s1a-sign-date {
+      font-style: italic;
+      margin-bottom: 4px;
+    }
+
+    .s1a-sign-role {
+      font-weight: 700;
+      line-height: 1.35;
+    }
+
+    .s1a-sign-guide {
+      font-style: italic;
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .s1a-sign-space {
+      height: 70px;
+    }
+
+    .s1a-sign-name {
+      font-weight: 700;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    /* Print styles for A4 export */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 15mm 12mm 15mm 12mm;
+      }
+
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-family: "Times New Roman", Times, serif !important;
+        font-size: 13pt;
+      }
+
+      .banner,
+      .alert-warning,
+      .controls-card,
+      .view-tabs,
+      .status-bar,
+      .modal-backdrop,
+      .s1a-controls,
+      .tab-content:not(.active),
+      .no-print {
+        display: none !important;
+      }
+
+      .container {
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .tab-content.active {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      .s1a-sheet-wrapper {
+        margin: 0 !important;
+        padding: 0 !important;
+        display: block !important;
+      }
+
+      .s1a-sheet {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        max-width: 100% !important;
+        width: 100% !important;
+      }
+
+      table.s1a-table {
+        width: calc(100% - 2px) !important;
+        page-break-inside: auto;
+      }
+
+      table.s1a-table thead {
+        display: table-header-group;
+      }
+
+      table.s1a-table tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+
+      table.s1a-table tfoot {
+        display: table-row-group;
+        page-break-inside: avoid;
+      }
+
+      .s1a-sign-container {
+        page-break-inside: avoid;
+      }
+
+      body.s1a-has-error #tab-s1a,
+      body.s1a-has-error #s1a-sheet-wrapper,
+      body.s1a-has-error #s1a-sheet,
+      #s1a-sheet-wrapper[style*="display: none"],
+      #s1a-sheet-wrapper[style*="display:none"],
+      #s1a-sheet[style*="display: none"],
+      #s1a-sheet[style*="display:none"] {
+        display: none !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -499,9 +824,10 @@
 
     <!-- Tab View Switcher -->
     <div class="view-tabs">
-      <button class="view-tab active" data-tab="tab-monthly">📊 Sổ tay thuế đầy đủ (10 cột)</button>
-      <button class="view-tab" data-tab="tab-simple">📋 Đơn giản (Mẫu Excel)</button>
-      <button class="view-tab" data-tab="tab-daily">📅 Bảng kê chi tiết theo ngày</button>
+      <button class="view-tab active" data-tab="tab-monthly" id="tab-btn-monthly">📊 Sổ tay thuế đầy đủ (10 cột)</button>
+      <button class="view-tab" data-tab="tab-simple" id="tab-btn-simple">📋 Đơn giản (Mẫu Excel)</button>
+      <button class="view-tab" data-tab="tab-daily" id="tab-btn-daily">📅 Bảng kê chi tiết theo ngày</button>
+      <button class="view-tab" data-tab="tab-s1a" id="tab-btn-s1a">📑 Sổ S1a-HKD (TT 152/2025/TT-BTC)</button>
     </div>
 
     <!-- Tab 1: Monthly Sổ tay thuế Table (Image 1) -->
@@ -567,6 +893,129 @@
         <div class="table-scroll-wrapper">
           <div id="daily-tables-container">
             <p style="padding: 20px; color: var(--muted); text-align: center;">Chưa có dữ liệu theo ngày.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab S1a: Mẫu số S1a-HKD (Thông tư 152/2025/TT-BTC) -->
+    <div id="tab-s1a" class="tab-content">
+      <div class="s1a-controls no-print">
+        <div style="font-weight: 700; font-size: 15px; margin-bottom: 12px; color: var(--text);">
+          Thiết lập thông tin khai báo Sổ S1a-HKD (Thông tư 152/2025/TT-BTC)
+        </div>
+        <div class="s1a-form-grid">
+          <div class="s1a-field">
+            <label for="s1a-input-name">Họ và tên Hộ / Cá nhân KD:</label>
+            <input type="text" id="s1a-input-name" placeholder="Để trống nếu tự điền khi ký..." autocomplete="off">
+          </div>
+          <div class="s1a-field">
+            <label for="s1a-input-address">Địa chỉ:</label>
+            <input type="text" id="s1a-input-address" placeholder="Địa chỉ cư trú hoặc kinh doanh..." autocomplete="off">
+          </div>
+          <div class="s1a-field">
+            <label for="s1a-input-taxcode">Mã số thuế:</label>
+            <input type="text" id="s1a-input-taxcode" placeholder="Mã số thuế cá nhân / hộ KD..." autocomplete="off">
+          </div>
+          <div class="s1a-field">
+            <label for="s1a-input-location">Địa điểm kinh doanh:</label>
+            <input type="text" id="s1a-input-location" value="Kinh doanh trên nền tảng số (Shopee Affiliate)" autocomplete="off">
+          </div>
+        </div>
+
+        <div class="s1a-form-grid" style="margin-bottom: 10px;">
+          <div class="s1a-field">
+            <label for="s1a-select-grouping">Phương pháp ghi sổ:</label>
+            <select id="s1a-select-grouping">
+              <option value="monthly" selected>Ghi tổng theo tháng (Định kỳ ngày cuối tháng - Mặc định)</option>
+              <option value="daily">Ghi chi tiết theo từng kỳ chi trả</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="s1a-actions">
+          <div class="s1a-source-note">
+            <strong>* Căn cứ doanh thu S1a:</strong> Báo cáo kỳ thanh toán Shopee Affiliate (<a href="https://affiliate.shopee.vn/payment/payout_record" target="_blank" rel="noopener">Payout Record</a>). Hoa hồng gộp (<code>eligibleTotalAmount</code>) trước mọi khoản giảm trừ: không trừ phí quản lý MCN, không trừ phí dịch vụ Shopee, không khấu trừ thuế GTGT/TNCN. Thời điểm ghi nhận: ngày tạo kỳ chi trả (<code>payoutCreatedTime</code>, fallback <code>payArrivalTime</code> nếu thiếu).
+          </div>
+          <div class="btn-group">
+            <button id="btn-s1a-save-profile" class="btn btn-outline" title="Lưu thông tin định danh vào bộ nhớ trình duyệt (không gửi qua mạng)">
+              <span>💾</span> Lưu thông tin
+            </button>
+            <button id="btn-s1a-print" class="btn btn-primary" title="In trực tiếp hoặc Lưu thành file PDF chuẩn A4">
+              <span>🖨️</span> In / Lưu PDF
+            </button>
+          </div>
+        </div>
+
+        <div class="s1a-notice">
+          <strong>Căn cứ pháp lý:</strong> Mẫu số S1a-HKD ban hành kèm theo Thông tư số 152/2025/TT-BTC ngày 31/12/2025 (hiệu lực từ 01/01/2026 của Bộ trưởng Bộ Tài chính). Sổ này dùng để ghi chép doanh thu bán hàng hóa, dịch vụ làm căn cứ xác định thuộc đối tượng chịu thuế GTGT, nộp thuế TNCN hoặc dùng để theo dõi, đối chiếu số liệu với cơ quan thuế. Doanh thu hiển thị là hoa hồng gộp thực tế từ Payout Record, độc lập với chế độ tính thuế cá nhân hay hộ kinh doanh.
+          <div style="margin-top: 6px; font-size: 12px; color: var(--muted);">💡 <em>Mẹo in PDF chuẩn đẹp:</em> Trong hộp thoại In của trình duyệt, chọn <strong>Lưu dưới dạng PDF (Save as PDF)</strong>, mở <em>Tùy chọn khác (More settings)</em> và <strong>bỏ chọn "Tiêu đề đầu trang và chân trang" (disable Headers and footers)</strong> để ẩn URL và ngày in.</div>
+        </div>
+      </div>
+
+      <div id="s1a-warning-banner" class="alert-warning" style="display: none; margin-bottom: 20px;">
+        <span class="alert-icon">⚠️</span>
+        <span id="s1a-warning-text"></span>
+      </div>
+
+      <div id="s1a-sheet-wrapper" class="s1a-sheet-wrapper">
+        <div id="s1a-sheet" class="s1a-sheet">
+          <div class="s1a-header-row">
+            <div class="s1a-taxpayer-col">
+              <div><strong>HỘ, CÁ NHÂN KINH DOANH:</strong> <span id="s1a-disp-name">....................................................</span></div>
+              <div><strong>Địa chỉ:</strong> <span id="s1a-disp-address">....................................................</span></div>
+              <div><strong>Mã số thuế:</strong> <span id="s1a-disp-taxcode">....................................................</span></div>
+            </div>
+            <div class="s1a-meta-col">
+              <div style="font-weight: 700;">Mẫu số S1a-HKD</div>
+              <div><em>(Kèm theo Thông tư số 152/2025/TT-BTC</em></div>
+              <div><em>ngày 31 tháng 12 năm 2025 của Bộ trưởng</em></div>
+              <div><em>Bộ Tài chính)</em></div>
+            </div>
+          </div>
+
+          <div class="s1a-title-section">
+            <h2 class="s1a-main-title">SỔ DOANH THU BÁN HÀNG HÓA, DỊCH VỤ</h2>
+            <div class="s1a-sub-info"><strong>Địa điểm kinh doanh:</strong> <span id="s1a-disp-location">Kinh doanh trên nền tảng số (Shopee Affiliate)</span></div>
+            <div class="s1a-sub-info"><strong>Kỳ kê khai:</strong> <span id="s1a-disp-period"></span></div>
+          </div>
+
+          <div class="s1a-unit">Đơn vị tính: đồng</div>
+
+          <table class="s1a-table">
+            <thead>
+              <tr>
+                <th style="width: 130px;">Ngày, tháng</th>
+                <th>Diễn giải</th>
+                <th style="width: 150px;">Số tiền</th>
+              </tr>
+              <tr class="s1a-subcol">
+                <th>A</th>
+                <th>B</th>
+                <th>1</th>
+              </tr>
+            </thead>
+            <tbody id="s1a-tbody">
+              <tr>
+                <td colspan="3" style="text-align: center; color: var(--muted); padding: 30px;">Chưa có dữ liệu.</td>
+              </tr>
+            </tbody>
+            <tfoot id="s1a-tfoot">
+              <tr>
+                <td colspan="2" style="text-align: center; font-weight: 700;">Tổng cộng</td>
+                <td id="s1a-disp-total" style="text-align: right; font-weight: 700;">0</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div class="s1a-sign-container">
+            <div class="s1a-sign-box">
+              <div id="s1a-disp-sig-date" class="s1a-sign-date">Ngày ... tháng ... năm ...</div>
+              <div class="s1a-sign-role">NGƯỜI ĐẠI DIỆN HỘ KINH DOANH/<br>CÁ NHÂN KINH DOANH</div>
+              <div class="s1a-sign-guide">(Ký, ghi rõ họ tên, đóng dấu (nếu có))</div>
+              <div class="s1a-sign-space"></div>
+              <div id="s1a-disp-sig-name" class="s1a-sign-name"></div>
+            </div>
           </div>
         </div>
       </div>

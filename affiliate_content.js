@@ -175,6 +175,7 @@
 
       const payouts = [];
       const seenPayoutIds = new Set();
+      const gqlIssues = [];
       let csrfToken = null;
       let tokenLookupDone = false;
       let gql403Count = 0;
@@ -184,11 +185,16 @@
         new Promise((resolve) => setTimeout(resolve, minMs + Math.floor(Math.random() * (maxMs - minMs + 1))));
       // 1. GraphQL getPaymentPayoutBillingList - lặp đủ trang theo totalCount.
       // Chiến lược: POST không CSRF trước (chuẩn portal), chỉ thêm CSRF-token khi 403/401.
+      let payoutIncomplete = false;
+      let payoutSuccess = false;
+      let payoutTotalCount = null;
       try {
         const PAGE_LIMIT = 20;
-        let totalCount = 0;
         for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
-          if (gql403Count >= 2) break; // circuit breaker anti-bot
+          if (gql403Count >= 2) {
+            payoutIncomplete = true;
+            break; // circuit breaker anti-bot
+          }
           if (pageNum > 1) await sleepJitter(400, 1200);
           const callGql = async (withCsrf) => {
             const hdrs = Object.assign({}, headers);
@@ -211,7 +217,7 @@
             return { status: res.status, json: json };
           };
 
-          let r = await callGql(false);
+          let r = await callGql(Boolean(csrfToken));
           let node = r.json?.data?.getPaymentPayoutBillingList;
           if (!node && (r.status === 403 || r.status === 401)) {
             gql403Count++;
@@ -226,40 +232,93 @@
               if (!node && (r.status === 403 || r.status === 401)) gql403Count++;
             }
           }
-          if (!node) break;
-          const pList = Array.isArray(node.payoutList) ? node.payoutList : [];
+          if (!node) {
+            const errs = Array.isArray(r.json?.errors)
+              ? r.json.errors.map(e => e.message).join("; ")
+              : (r.json?.msg || r.json?.error_message || `HTTP ${r.status}`);
+            gqlIssues.push(String(errs));
+            payoutIncomplete = true;
+            break;
+          }
+          if (Array.isArray(r.json?.errors) && r.json.errors.length > 0) {
+            const errs = r.json.errors.map(e => e.message).join("; ");
+            gqlIssues.push(`GraphQL partial errors: ${errs}`);
+            payoutIncomplete = true;
+          }
+          const pList = Array.isArray(node.payoutList) ? node.payoutList : null;
+          if (!pList) {
+            gqlIssues.push("Dữ liệu Payout không đúng cấu trúc.");
+            payoutIncomplete = true;
+            break;
+          }
+          const rawTotal = parseInt(node.pagination?.totalCount, 10);
+          if (!isNaN(rawTotal)) payoutTotalCount = rawTotal;
+
           let newItems = 0;
           for (const it of pList) {
             const pid = it?.paymentPayout?.payoutId || it?.payoutId;
-            if (!pid || seenPayoutIds.has(pid)) continue;
-            seenPayoutIds.add(pid);
+            const normPid = pid !== undefined && pid !== null && String(pid).trim() !== "" ? String(pid).trim() : null;
+            if (!normPid || seenPayoutIds.has(normPid)) continue;
+            seenPayoutIds.add(normPid);
             payouts.push(it);
             newItems++;
           }
-          const total = parseInt(node.pagination?.totalCount || 0, 10) || 0;
-          if (total > 0) totalCount = total;
-          if (newItems === 0) break;
-          if (totalCount > 0 && payouts.length >= totalCount) break;
-          if (pList.length === 0) break;
+
+          if (pageNum === 1) {
+            payoutSuccess = true;
+          }
+
+          if (payoutTotalCount === 0) break;
+          if (payoutTotalCount !== null && payoutTotalCount > 0 && payouts.length >= payoutTotalCount) break;
+
+          if (pList.length === 0 || newItems === 0) {
+            if (payoutTotalCount !== null && payoutTotalCount > 0 && payouts.length < payoutTotalCount) {
+              payoutIncomplete = true;
+              gqlIssues.push(`Dừng tải sớm: nhận ${payouts.length}/${payoutTotalCount} bản ghi Payout.`);
+            }
+            break;
+          }
+
+          if (payoutTotalCount === null) {
+            const actualPageSize = parseInt(node.pagination?.pageSize || node.pageSize || 0, 10) || 50;
+            if (pList.length < actualPageSize) break;
+          }
+
+          if (pageNum === PAGE_LIMIT) {
+            if (payoutTotalCount === null || payouts.length < payoutTotalCount) {
+              payoutIncomplete = true;
+            }
+          }
         }
-      } catch (_) {}
+        if (payoutTotalCount !== null && payoutTotalCount > 0 && payouts.length < payoutTotalCount) {
+          payoutIncomplete = true;
+        }
+      } catch (_) {
+        payoutIncomplete = true;
+      }
 
       // 2. Billing List theo ngày hoàn thành đơn (kê khai + các tháng không có payout)
       const currentYear = new Date().getFullYear();
       const s = Math.floor(new Date(`${currentYear}-01-01T00:00:00+07:00`).getTime() / 1000);
       const e = Math.floor(new Date(`${currentYear}-12-31T23:59:59+07:00`).getTime() / 1000);
       let billingList = [];
+      let isBillingSuccess = false;
       try {
         const url = `/api/v3/payment/billing_list?order_completed_start_time=${s}&order_completed_end_time=${e}`;
         const res = await fetch(url);
         const json = await res.json();
-        if (json.code === 0 && Array.isArray(json.data?.list)) {
+        if (json.code === 0 && Array.isArray(json.data?.list) && json.data.list.every(x => Boolean(x) && typeof x === "object" && !Array.isArray(x))) {
           billingList = json.data.list;
+          isBillingSuccess = true;
         }
       } catch (_) {}
 
       // 3. GraphQL getPaymentSummaryBillFeeInvoiceList - Hóa đơn phí dịch vụ điện tử (service_fee_invoice)
       const feeInvoices = [];
+      const seenFeeKeys = new Set();
+      let feeTotalCount = null;
+      let feeIncomplete = false;
+
       const FEE_INVOICE_QUERY = `
         query GetPaymentSummaryBillFeeInvoiceListQuery($pageNum: Int, $pageSize: Int, $serviceFeeInvoiceFilter: ServiceFeeInvoiceFilterInput) {
           getPaymentSummaryBillFeeInvoiceList(pageNum: $pageNum, pageSize: $pageSize, serviceFeeInvoiceFilter: $serviceFeeInvoiceFilter) {
@@ -279,43 +338,210 @@
           }
         }`;
       try {
-        if (gql403Count < 2) {
-          const hdrs = Object.assign({}, headers);
-          if (csrfToken) hdrs["CSRF-token"] = csrfToken;
-          const res = await fetch("/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList", {
-            method: "POST",
-            headers: hdrs,
-            body: JSON.stringify({
-              operationName: "GetPaymentSummaryBillFeeInvoiceListQuery",
-              query: FEE_INVOICE_QUERY,
-              variables: { pageSize: 50, pageNum: 1, serviceFeeInvoiceFilter: {} }
-            })
-          });
-          let json = null;
-          try { json = await res.json(); } catch (_) {}
-          const node = json?.data?.getPaymentSummaryBillFeeInvoiceList;
-          if (Array.isArray(node?.paymentSummaryBillFeeInvoices)) {
-            for (const inv of node.paymentSummaryBillFeeInvoices) {
-              feeInvoices.push({
-                isFeeInvoice: true,
-                paymentCompletePeriodStartTime: inv.paymentCompletePeriodStartTime,
-                paymentCompletePeriodEndTime: inv.paymentCompletePeriodEndTime,
-                totalServiceFee: inv.totalServiceFee,
-                invoiceNumber: inv.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || ""
-              });
+        const PAGE_LIMIT = 20;
+        for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
+          if (gql403Count >= 2) {
+            feeIncomplete = true;
+            break;
+          }
+          if (pageNum > 1) await sleepJitter(400, 1200);
+
+          const callFeeGql = async (withCsrf) => {
+            const hdrs = Object.assign({}, headers);
+            if (withCsrf && csrfToken) hdrs["CSRF-token"] = csrfToken;
+            const res = await fetch("/api/v3/gql?q=getPaymentSummaryBillFeeInvoiceList", {
+              method: "POST",
+              headers: hdrs,
+              body: JSON.stringify({
+                operationName: "GetPaymentSummaryBillFeeInvoiceListQuery",
+                query: FEE_INVOICE_QUERY,
+                variables: { pageSize: 50, pageNum: pageNum, serviceFeeInvoiceFilter: {} }
+              })
+            });
+            const fresh = res.headers && res.headers.get ? res.headers.get("csrf-token") : null;
+            if (fresh) csrfToken = fresh;
+            let json = null;
+            try { json = await res.json(); } catch (_) {}
+            return { status: res.status, json: json };
+          };
+
+          let r = await callFeeGql(Boolean(csrfToken));
+          let node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+          if (!node && (r.status === 403 || r.status === 401)) {
+            gql403Count++;
+            if (!tokenLookupDone) {
+              tokenLookupDone = true;
+              csrfToken = csrfToken || (await discoverCsrfToken());
+            }
+            if (csrfToken) {
+              r = await callFeeGql(true);
+              node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+              if (!node && (r.status === 403 || r.status === 401)) gql403Count++;
+            }
+          }
+
+          if (!node) {
+            feeIncomplete = true;
+            break;
+          }
+
+          if (Array.isArray(r.json?.errors) && r.json.errors.length > 0) {
+            feeIncomplete = true;
+          }
+
+          const invList = Array.isArray(node.paymentSummaryBillFeeInvoices) ? node.paymentSummaryBillFeeInvoices : null;
+          if (!invList) {
+            feeIncomplete = true;
+            break;
+          }
+
+          const rawTotal = parseInt(node.totalCount, 10);
+          if (!isNaN(rawTotal)) feeTotalCount = rawTotal;
+
+          let newItems = 0;
+          for (const inv of invList) {
+            const invNum = inv.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || inv.invoiceNumber || "";
+            const periodStart = inv.paymentCompletePeriodStartTime || "";
+            const dedupKey = invNum ? `${periodStart}_${invNum}` : `${periodStart}_${inv.totalServiceFee ?? 0}`;
+            if (seenFeeKeys.has(dedupKey)) continue;
+            seenFeeKeys.add(dedupKey);
+
+            feeInvoices.push({
+              isFeeInvoice: true,
+              paymentCompletePeriodStartTime: inv.paymentCompletePeriodStartTime,
+              paymentCompletePeriodEndTime: inv.paymentCompletePeriodEndTime,
+              totalServiceFee: inv.totalServiceFee,
+              invoiceNumber: invNum
+            });
+            newItems++;
+          }
+
+          if (feeTotalCount === 0) break;
+          if (feeTotalCount !== null && feeTotalCount > 0 && feeInvoices.length >= feeTotalCount) break;
+
+          if (invList.length === 0 || newItems === 0) {
+            if (feeTotalCount !== null && feeTotalCount > 0 && feeInvoices.length < feeTotalCount) {
+              feeIncomplete = true;
+            }
+            break;
+          }
+
+          if (feeTotalCount === null) {
+            const actualPageSize = parseInt(node.pageSize || 0, 10) || 50;
+            if (invList.length < actualPageSize) break;
+          }
+
+          if (pageNum === PAGE_LIMIT) {
+            if (feeTotalCount === null || feeInvoices.length < feeTotalCount) {
+              feeIncomplete = true;
             }
           }
         }
-      } catch (_) {}
 
-      if (payouts.length > 0 || billingList.length > 0 || feeInvoices.length > 0) {
+        if (feeTotalCount !== null && feeTotalCount > 0 && feeInvoices.length < feeTotalCount) {
+          feeIncomplete = true;
+        }
+      } catch (_) {
+        feeIncomplete = true;
+      }
+
+      chrome.storage.local.get([STORAGE_KEY], (stored) => {
+        const rawExisting = stored?.[STORAGE_KEY]?.list;
+        const existingList = Array.isArray(rawExisting)
+          ? rawExisting.filter(x => Boolean(x) && typeof x === "object" && !Array.isArray(x))
+          : [];
+        const prevPayouts = existingList.filter(x => x && (x.paymentPayout || x.payoutId || x.payoutCreatedTime || x.payArrivalTime) && !x.isFeeInvoice);
+        const prevBilling = existingList.filter(x => !x.paymentPayout && !x.payoutId && !x.payoutCreatedTime && !x.payArrivalTime && !x.isFeeInvoice && x.order_completed_period_start_time);
+        const prevInvoices = existingList.filter(x => x.isFeeInvoice);
+        const getPayoutId = (it) => {
+          const raw = it?.paymentPayout?.payoutId ?? it?.payoutId;
+          return raw !== undefined && raw !== null && String(raw).trim() !== "" ? String(raw).trim() : null;
+        };
+
+        let finalPayouts = [];
+        let payoutWarning = "";
+
+        if (payoutSuccess === true && !payoutIncomplete) {
+          finalPayouts = payouts;
+        } else if (payouts.length > 0) {
+          const newIds = new Set(payouts.map(getPayoutId).filter(Boolean));
+          const retained = prevPayouts.filter(x => {
+            const id = getPayoutId(x);
+            return id ? !newIds.has(id) : true;
+          });
+          finalPayouts = [...payouts, ...retained];
+          payoutWarning = "Chưa tải đủ kỳ thanh toán Payout Record";
+        } else if (prevPayouts.length > 0) {
+          finalPayouts = prevPayouts;
+          payoutWarning = "Không thể làm mới Payout Record";
+        } else {
+          finalPayouts = [];
+          if (payoutSuccess !== true || payoutIncomplete) {
+            payoutWarning = gqlIssues.length > 0 ? `Payout lỗi: ${gqlIssues.join(" | ")}` : "Không thể làm mới Payout Record";
+          }
+        }
+
+        let finalBillingList = [];
+        let billingWarning = "";
+        if (isBillingSuccess) {
+          finalBillingList = billingList;
+        } else {
+          finalBillingList = prevBilling;
+          billingWarning = "Không thể làm mới billing_list";
+        }
+
+        let finalFeeInvoices = [];
+        if (feeInvoices.length > 0) {
+          if (feeIncomplete && prevInvoices.length > 0) {
+            const getFeeMonthKey = (it) => {
+              if (it.monthKey) return it.monthKey;
+              const rawS = it.paymentCompletePeriodStartTime ? Number(it.paymentCompletePeriodStartTime) : 0;
+              const s = rawS >= 1e11 ? Math.floor(rawS / 1000) : Math.floor(rawS);
+              if (s) {
+                const dt = new Date(s * 1000 + 7 * 3600000);
+                return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+              }
+              return null;
+            };
+            const newMonths = new Set(feeInvoices.map(getFeeMonthKey).filter(Boolean));
+            const keptPrev = prevInvoices.filter(x => !newMonths.has(getFeeMonthKey(x)));
+            finalFeeInvoices = [...feeInvoices, ...keptPrev];
+          } else {
+            finalFeeInvoices = feeInvoices;
+          }
+        } else if (prevInvoices.length > 0) {
+          if (feeTotalCount === 0 && !feeIncomplete) {
+            finalFeeInvoices = [];
+          } else {
+            finalFeeInvoices = prevInvoices;
+          }
+        }
+
+        // On complete source failure for revenue, DO NOT replace existing valid cache with invoice-only data!
+        // Only guard against wipeout when NOT authoritative success for both revenue APIs
+        const isBothRevenueAuthoritative = payoutSuccess === true && !payoutIncomplete && isBillingSuccess;
+        if (finalPayouts.length === 0 && finalBillingList.length === 0 && !isBothRevenueAuthoritative) {
+          return;
+        }
+
+        const cacheWarnings = [];
+        if (payoutWarning) cacheWarnings.push(payoutWarning);
+        if (billingWarning) cacheWarnings.push(billingWarning);
+        if (feeIncomplete) cacheWarnings.push("HĐ phí DV chưa đầy đủ");
+        if (finalPayouts.length === 0 && (payoutSuccess !== true || payoutIncomplete || gqlIssues.length > 0)) {
+          if (!cacheWarnings.some(w => w.includes("Payout"))) {
+            cacheWarnings.push(gqlIssues.length > 0 ? `Payout lỗi: ${gqlIssues.join(" | ")}` : "Không thể làm mới Payout Record");
+          }
+        }
+
         chrome.storage.local.set({
           [STORAGE_KEY]: {
             updatedAt: Date.now(),
-            list: [...payouts, ...billingList, ...feeInvoices]
+            list: [...finalPayouts, ...finalBillingList, ...finalFeeInvoices],
+            warnings: cacheWarnings
           }
         });
-      }
+      });
     } catch (_) {
       // Ignore background fetch errors
     }

@@ -347,8 +347,10 @@ function setAffiliateStatus(msg, type = "") {
 // Amounts từ Shopee trả về dạng micro-unit (x100.000), ví dụ "7179000000" = 71.790 đ
 // decompose luôn nhận micro-unit (API thật / text dán / cache cũ đều x100.000 trước khi nhập)
 function affiliateDecScale(val) {
-  const num = parseFloat(val || 0) || 0;
-  return Math.abs(num) >= 100000 ? Math.round(num / 100000) : num;
+  if (val === undefined || val === null || String(val).trim() === "") return 0;
+  const num = Number(String(val).trim());
+  if (!Number.isFinite(num) || num < 0) return 0;
+  return Math.round(num / 100000);
 }
 
 const AFFILIATE_SERVICE_FEE_RATE = 0.0098; // 0.98%
@@ -433,7 +435,9 @@ async function loadAffiliateSummary() {
     }
   });
 
-  cachedAffiliateList = Array.isArray(cached?.list) ? cached.list : [];
+  cachedAffiliateList = Array.isArray(cached?.list)
+    ? cached.list.filter(x => Boolean(x) && typeof x === "object" && !Array.isArray(x))
+    : [];
   if (cachedAffiliateList.length === 0) {
     setAffiliateStatus("Chưa có dữ liệu cache. Hãy bấm 'Đồng bộ dữ liệu' từ tab Affiliate hoặc mở Sổ tay thuế.");
     return;
@@ -442,9 +446,21 @@ async function loadAffiliateSummary() {
   // Find all months
   const monthsSet = new Set();
   for (const it of cachedAffiliateList) {
-    const s = it.order_completed_period_start_time || it.paymentPayout?.payoutCreatedTime || it.payoutCreatedTime;
-    if (!s) continue;
-    const dt = new Date(s * 1000 + 7 * 3600000);
+    if (!it || typeof it !== "object" || it.isFeeInvoice) continue;
+    let s = it.order_completed_period_start_time;
+    if (s === undefined || s === null || String(s).trim() === "") {
+      const p = it.paymentPayout || it;
+      let rawTime = p.payoutCreatedTime ?? it.payoutCreatedTime;
+      if (rawTime === undefined || rawTime === null || String(rawTime).trim() === "") {
+        rawTime = p.payArrivalTime ?? it.payArrivalTime;
+      }
+      s = rawTime;
+    }
+    if (s === undefined || s === null || String(s).trim() === "") continue;
+    const numTime = Number(String(s).trim());
+    if (!Number.isFinite(numTime) || numTime <= 0 || numTime >= 1e11) continue;
+    const sec = Math.floor(numTime);
+    const dt = new Date(sec * 1000 + 7 * 3600000);
     const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
     monthsSet.add(m);
   }
@@ -473,13 +489,57 @@ async function loadAffiliateSummary() {
   }
 
   updateAffiliateSummaryMetrics();
+  const payoutCount = cachedAffiliateList.filter(it => it.paymentPayout || it.payoutId || it.payoutCreatedTime || it.payArrivalTime).length;
+  const invoiceCount = cachedAffiliateList.filter(it => it.isFeeInvoice || (!it.order_completed_period_start_time && it.totalServiceFee && (it.monthKey || it.paymentSummaryBillFeeInvoices || it.paymentCompletePeriodStartTime))).length;
+  const billingCount = cachedAffiliateList.filter(it => !it.isFeeInvoice && !it.paymentPayout && !it.payoutId && !it.payoutCreatedTime && !it.payArrivalTime && it.order_completed_period_start_time).length;
+
+  const countParts = [];
+  if (payoutCount > 0) countParts.push(`${payoutCount} Payout`);
+  if (billingCount > 0) countParts.push(`${billingCount} ngày hoàn thành`);
+  if (invoiceCount > 0) countParts.push(`${invoiceCount} HĐ phí DV`);
+  const countLabel = countParts.join(" + ") || `${cachedAffiliateList.length} bản ghi`;
+
   const dateStr = cached?.updatedAt ? new Date(cached.updatedAt).toLocaleTimeString("vi-VN") : "";
-  setAffiliateStatus(`Dữ liệu nạp từ Cache (${cachedAffiliateList.length} bản ghi)${dateStr ? ` - Lưu lúc ${dateStr}` : ""}.`, "success");
+  const hasWarn = Array.isArray(cached?.warnings) && cached.warnings.length > 0;
+  const warnText = hasWarn ? ` [Cảnh báo: ${cached.warnings.join("; ")}]` : "";
+  setAffiliateStatus(`Dữ liệu nạp từ Cache (${countLabel})${warnText}${dateStr ? ` - Lưu lúc ${dateStr}` : ""}.`, hasWarn ? "normal" : "success");
+}
+
+function enumerateCalendarMonthsPopup(startM, endM) {
+  if (!startM || !endM || startM > endM) return [];
+  const res = [];
+  const [y1, m1] = startM.split("-").map(Number);
+  const [y2, m2] = endM.split("-").map(Number);
+  let curY = y1, curM = m1;
+  while (curY < y2 || (curY === y2 && curM <= m2)) {
+    res.push(`${curY}-${String(curM).padStart(2, "0")}`);
+    curM++;
+    if (curM > 12) {
+      curY++;
+      curM = 1;
+    }
+  }
+  return res;
 }
 
 function updateAffiliateSummaryMetrics() {
   const fromM = popupFromMonth.value;
   const toM = popupToMonth.value;
+
+  if (fromM && toM && fromM > toM) {
+    const affDailyReconEl = document.getElementById("aff-daily-reconciliation");
+    if (affDailyReconEl) affDailyReconEl.innerHTML = "";
+    affSimpleTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affSimpleTfoot.innerHTML = "";
+    affFullTbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affFullTfoot.innerHTML = "";
+    affDailyTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affDailyTfoot.innerHTML = "";
+    affiliateTotalGross.textContent = "--";
+    affiliateNetTk.textContent = "--";
+    affiliateTaxTotal.textContent = "--";
+    return;
+  }
 
   let totalGross = 0;
   let totalNet = 0;
@@ -493,27 +553,32 @@ function updateAffiliateSummaryMetrics() {
   let totalTaxPitKd = 0;
 
   const monthlyMap = {};
-  const dailyList = [];
+  const dailyMap = {};
   const feeInvoicesMap = {};
+  const seenInvoiceKeys = new Set();
   for (const it of cachedAffiliateList) {
     if (it.isFeeInvoice || (it.paymentSummaryBillFeeInvoices && it.totalServiceFee) || (it.paymentCompletePeriodStartTime && it.totalServiceFee && !it.order_completed_period_start_time)) {
       const s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
       const dt = new Date(s * 1000 + 7 * 3600000);
       const m = it.monthKey || (s ? `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}` : null);
-      if (m) feeInvoicesMap[m] = decScale(it.totalServiceFee);
+      if (!m) continue;
+      const invId = it.invoiceNumber || it.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || "";
+      const dedupKey = invId ? `${invId}_${m}` : `${s || 0}_${it.totalServiceFee || 0}_${m}`;
+      if (seenInvoiceKeys.has(dedupKey)) continue;
+      seenInvoiceKeys.add(dedupKey);
+      feeInvoicesMap[m] = (feeInvoicesMap[m] || 0) + affiliateDecScale(it.totalServiceFee);
     }
   }
 
-  const monthlyMap = {};
-  const dailyList = [];
-
-  // Pass 1: Billing List theo ngày hoàn thành đơn (chuẩn hạch toán doanh thu và HĐ phí DV cho các tháng trước 10/2026)
+  // Pass 1: Billing List theo ngày hoàn thành đơn (chuẩn hạch toán doanh thu theo ngày và fallback khi thiếu Payout)
   for (const it of cachedAffiliateList) {
-    if (it.paymentPayout || it.payoutId || it.isFeeInvoice) continue;
+    if (it.paymentPayout || it.payoutId || it.payoutCreatedTime || it.payArrivalTime || it.isFeeInvoice) continue;
     const s = it.order_completed_period_start_time;
     if (!s) continue;
     const dt = new Date(s * 1000 + 7 * 3600000);
     const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+    if (fromM && m < fromM) continue;
+    if (toM && m > toM) continue;
 
     const gross = parseFloat(it.eligible_total_amount_dis || it.eligible_total_amount || 0) || 0;
     const mcn = parseFloat(it.mcn_management_fee_dis || it.mcn_management_fee || 0) || 0;
@@ -541,9 +606,12 @@ function updateAffiliateSummaryMetrics() {
         vat: 0,
         fee: 0,
         netPaid: 0,
-        hasPayout: false
+        hasPayout: false,
+        hasBilling: false
       };
     }
+    monthlyMap[m].hasBilling = true;
+    monthlyMap[m].billingGross = (monthlyMap[m].billingGross || 0) + gross;
     monthlyMap[m].gross += gross;
     monthlyMap[m].mcn += mcn;
     monthlyMap[m].billTotal += billTotal;
@@ -554,39 +622,80 @@ function updateAffiliateSummaryMetrics() {
     monthlyMap[m].netPaid += billTotal;
 
     const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
-    dailyList.push({
-      dateStr: dayStr,
-      timestamp: s,
-      amount: gross
-    });
+    if (!dailyMap[dayStr]) {
+      dailyMap[dayStr] = {
+        dateStr: dayStr,
+        timestamp: s,
+        amount: 0
+      };
+    }
+    dailyMap[dayStr].amount += gross;
   }
 
-  // Pass 2: Payout Record theo từng kỳ chi trả thực tế
+  // Pass 2: Payout Record theo từng kỳ chi trả thực tế (chuẩn đối soát tài chính cho mọi tháng có Payout)
+  const seenPayouts = new Map();
   for (const it of cachedAffiliateList) {
-    if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime)) continue;
+    if (!it || typeof it !== "object") continue;
+    if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime || it.payArrivalTime)) continue;
     if (it.isFeeInvoice) continue;
     const p = it.paymentPayout || it;
-    const s = parseInt(p.payoutCreatedTime || p.payArrivalTime || 0, 10);
-    if (!s) continue;
 
+    // 1. Phân giải & xác thực thời gian
+    let rawTime = p.payoutCreatedTime ?? it.payoutCreatedTime;
+    if (rawTime === undefined || rawTime === null || String(rawTime).trim() === "") {
+      rawTime = p.payArrivalTime ?? it.payArrivalTime;
+    }
+    if (rawTime === undefined || rawTime === null || String(rawTime).trim() === "") continue;
+
+    const numTime = Number(String(rawTime).trim());
+    if (!Number.isFinite(numTime) || numTime <= 0 || numTime >= 1e11) continue;
+
+    const s = Math.floor(numTime);
     const dt = new Date(s * 1000 + 7 * 3600000);
     const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-    const isOctOnwards = m >= "2026-10";
+    if (fromM && m < fromM) continue;
+    if (toM && m > toM) continue;
 
-    // Trước 10/2026: giữ nguyên số liệu billing_list đã khớp hóa đơn điện tử
-    if (!isOctOnwards && monthlyMap[m] && monthlyMap[m].gross > 0 && !monthlyMap[m].hasPayout) {
-      continue;
+    // 2. Xác thực số tiền hoa hồng gộp
+    const rawAmt = p.eligibleTotalAmount;
+    if (rawAmt === undefined || rawAmt === null || String(rawAmt).trim() === "") continue;
+    const numAmt = Number(String(rawAmt).trim());
+    if (!Number.isFinite(numAmt) || numAmt < 0) continue;
+
+    const amt = Math.round(numAmt / 100000);
+    const payoutId = String(p.payoutId || it.payoutId || "").trim();
+
+    // 3. Khử trùng lặp & kiểm tra xung đột
+    if (payoutId) {
+      if (seenPayouts.has(payoutId)) {
+        const prev = seenPayouts.get(payoutId);
+        if (prev.amt !== amt || prev.s !== s) {
+          console.warn(`Xung đột dữ liệu Payout ID ${payoutId}`);
+          continue;
+        }
+        continue;
+      }
+      seenPayouts.set(payoutId, { amt, s, mKey: m });
     }
 
-    if (isOctOnwards && (!monthlyMap[m] || !monthlyMap[m].hasPayout)) {
-      monthlyMap[m] = { month: m, gross: 0, mcn: 0, billTotal: 0, wht10: 0, pit: 0, vat: 0, fee: 0, netPaid: 0, hasPayout: true };
-      for (let i = dailyList.length - 1; i >= 0; i--) {
-        const parts = dailyList[i].dateStr.split("/");
-        const dm = `${parts[2]}-${parts[1]}`;
-        if (dm === m) dailyList.splice(i, 1);
-      }
-    } else if (!monthlyMap[m]) {
-      monthlyMap[m] = { month: m, gross: 0, mcn: 0, billTotal: 0, wht10: 0, pit: 0, vat: 0, fee: 0, netPaid: 0, hasPayout: true };
+    // Cho MỌI tháng có Payout: Payout Record là chuẩn đối soát tài chính
+    if (!monthlyMap[m] || !monthlyMap[m].hasPayout) {
+      const hadBilling = Boolean(monthlyMap[m]?.hasBilling);
+      const prevBillingGross = monthlyMap[m]?.billingGross || 0;
+      monthlyMap[m] = {
+        month: m,
+        gross: 0,
+        mcn: 0,
+        billTotal: 0,
+        wht10: 0,
+        pit: 0,
+        vat: 0,
+        fee: 0,
+        netPaid: 0,
+        hasPayout: true,
+        hasBilling: hadBilling,
+        billingGross: prevBillingGross
+      };
     }
 
     const d = decomposeAffiliatePayout(it, m);
@@ -598,26 +707,17 @@ function updateAffiliateSummaryMetrics() {
     monthlyMap[m].vat += d.vat;
     monthlyMap[m].fee += d.fee;
     monthlyMap[m].netPaid += d.net;
-
-    const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
-    dailyList.push({
-      dateStr: dayStr,
-      timestamp: s,
-      amount: d.gross
-    });
+    // Tuyệt đối không đưa payout vào bảng kê ngày hoàn thành đơn!
   }
 
-  // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử chính thức từ service_fee_invoice
-  // (khi tháng đã kết thúc và được Shopee xuất HĐ chính thức, ví dụ 01-09/2026 hoặc tháng 10 khi sang tháng 11)
+  // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử từ service_fee_invoice cho các tháng hạch toán theo billing
+  // Không ghi đè các tháng đã có Payout Record thực tế (Payout ghi nhận theo ngày chi trả tiền mặt)
   for (const m of Object.keys(feeInvoicesMap)) {
-    if (monthlyMap[m]) {
+    if (fromM && m < fromM) continue;
+    if (toM && m > toM) continue;
+    if (monthlyMap[m] && !monthlyMap[m].hasPayout) {
       monthlyMap[m].fee = feeInvoicesMap[m];
       monthlyMap[m].billTotal = Math.max(0, monthlyMap[m].gross - monthlyMap[m].mcn - monthlyMap[m].fee);
-      if (monthlyMap[m].hasPayout) {
-        monthlyMap[m].netPaid = Math.max(0, monthlyMap[m].billTotal - monthlyMap[m].vat - monthlyMap[m].pit - monthlyMap[m].wht10);
-      } else {
-        monthlyMap[m].netPaid = monthlyMap[m].billTotal;
-      }
     }
   }
 
@@ -711,10 +811,17 @@ function updateAffiliateSummaryMetrics() {
 
   for (const m of sortedMonths) {
     const r = monthlyMap[m];
+    const hasPayout = Boolean(r.hasPayout);
+    const hasBilling = Boolean(r.hasBilling);
+    const sourceLabel = hasPayout ? "(Payout)" : (hasBilling ? "(Fallback Billing)" : "");
+    const badge = hasPayout
+      ? '<span style="font-size:10px; color:#0984e3; margin-left:3px;">[Payout]</span>'
+      : (hasBilling ? '<span style="font-size:10px; color:#d35400; margin-left:3px;">[Billing]</span>' : '');
+
     simpleRows.push(`
       <tr>
         <td class="sticky-col">${m}</td>
-        <td style="text-align:left;">Doanh thu từ Shopee</td>
+        <td style="text-align:left;">Doanh thu từ Shopee ${sourceLabel}</td>
         <td>${formatCurrency(r.gross)}</td>
         <td style="color:#2ed573; font-weight:600;">${formatCurrency(r.netTk)}</td>
       </tr>
@@ -722,7 +829,7 @@ function updateAffiliateSummaryMetrics() {
 
     fullRows.push(`
       <tr>
-        <td class="sticky-col">${m}</td>
+        <td class="sticky-col">${m}${badge}</td>
         <td>${formatCurrency(r.gross)}</td>
         <td>${formatCurrency(r.mcn)}</td>
         <td>${formatCurrency(r.afterMcn)}</td>
@@ -762,26 +869,108 @@ function updateAffiliateSummaryMetrics() {
     </tr>
   `;
 
-  // Render Daily Table
-  dailyList.sort((a, b) => a.timestamp - b.timestamp);
-  const dailyRows = dailyList.map(d => `
-    <tr>
-      <td class="sticky-col">${d.dateStr}</td>
-      <td style="text-align:left;">Doanh thu từ Shopee</td>
-      <td>${formatCurrency(d.amount)}</td>
-    </tr>
-  `);
-  affDailyTbody.innerHTML = dailyRows.join("");
-  affDailyTfoot.innerHTML = `
-    <tr>
-      <td class="sticky-col">Tổng Doanh Thu</td>
-      <td style="text-align:left;">${dailyList.length} ngày</td>
-      <td style="color:#ee4d2d; font-weight:800;">${formatCurrency(totalGross)}</td>
-    </tr>
-  `;
+  // Render Daily Table & Compact Reconciliation
+  const dailyList = Object.values(dailyMap).sort((a, b) => a.timestamp - b.timestamp);
+  let totalDailyBilling = 0;
+  for (const d of dailyList) {
+    totalDailyBilling += d.amount;
+  }
+
+  const selectedCalendarMonths = (fromM && toM) ? enumerateCalendarMonthsPopup(fromM, toM) : sortedMonths;
+  let allBillingComplete = true;
+  let allPayoutComplete = true;
+  let totalBillingInSelected = 0;
+  let totalPayoutInSelected = 0;
+  const missingBillingMonths = [];
+  const missingPayoutMonths = [];
+
+  for (const m of selectedCalendarMonths) {
+    const data = monthlyMap[m];
+    if (data && data.hasBilling) {
+      totalBillingInSelected += (data.billingGross || 0);
+    } else {
+      allBillingComplete = false;
+      missingBillingMonths.push(m);
+    }
+
+    if (data && data.hasPayout) {
+      totalPayoutInSelected += (data.gross || 0);
+    } else {
+      allPayoutComplete = false;
+      missingPayoutMonths.push(m);
+    }
+  }
+
+  const affDailyReconEl = document.getElementById("aff-daily-reconciliation");
+  if (affDailyReconEl) {
+    if (selectedCalendarMonths.length === 0) {
+      affDailyReconEl.innerHTML = "";
+    } else {
+      const billingLabel = allBillingComplete
+        ? `${formatCurrency(totalBillingInSelected)}`
+        : `Chưa đầy đủ (thiếu ${missingBillingMonths.map(m => m.slice(5) + '/' + m.slice(0, 4)).join(', ')})`;
+      const payoutLabel = allPayoutComplete
+        ? `${formatCurrency(totalPayoutInSelected)}`
+        : `Chưa đầy đủ (thiếu ${missingPayoutMonths.map(m => m.slice(5) + '/' + m.slice(0, 4)).join(', ')})`;
+
+      let reconDiffHtml = "";
+      if (allBillingComplete && allPayoutComplete) {
+        const diff = totalPayoutInSelected - totalBillingInSelected;
+        const sign = diff > 0 ? `+${formatCurrency(diff)}` : (diff < 0 ? `-${formatCurrency(Math.abs(diff))}` : "0 đ");
+        reconDiffHtml = `Chênh lệch (Kỳ chi trả - Hoàn thành đơn): <strong style="color:${diff !== 0 ? '#d63031' : 'inherit'};">${sign}</strong>`;
+      } else {
+        reconDiffHtml = `Chênh lệch đối soát: <span style="color:var(--muted, #636e72);">Chưa đủ dữ liệu cả hai nguồn</span>`;
+      }
+
+      affDailyReconEl.innerHTML = `
+        <div style="font-weight:600; margin-bottom:2px;">Nguồn bảng kê ngày: Ngày hoàn thành đơn (Billing)</div>
+        <div>Billing hoàn thành: <strong>${billingLabel}</strong> | Payout gộp: <strong>${payoutLabel}</strong> | ${reconDiffHtml}</div>
+      `;
+    }
+  }
+
+  if (dailyList.length === 0) {
+    affDailyTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:18px;">Chưa có dữ liệu doanh thu theo ngày hoàn thành đơn</td></tr>`;
+    affDailyTfoot.innerHTML = "";
+  } else {
+    const dailyRows = dailyList.map(d => `
+      <tr>
+        <td class="sticky-col">${d.dateStr}</td>
+        <td style="text-align:left;">Doanh thu từ Shopee</td>
+        <td>${formatCurrency(d.amount)}</td>
+      </tr>
+    `);
+    affDailyTbody.innerHTML = dailyRows.join("");
+    affDailyTfoot.innerHTML = `
+      <tr>
+        <td class="sticky-col">Tổng Doanh Thu</td>
+        <td style="text-align:left;">${dailyList.length} ngày</td>
+        <td style="color:#ee4d2d; font-weight:800;">${formatCurrency(totalDailyBilling)}</td>
+      </tr>
+    `;
+  }
 }
 
 async function fetchAffiliateLive() {
+  if (!cachedAffiliateList || cachedAffiliateList.length === 0) {
+    const cached = await new Promise(resolve => {
+      if (chrome?.storage?.local) {
+        chrome.storage.local.get([AFFILIATE_CACHE_KEY_V2, AFFILIATE_CACHE_KEY_V1], res => {
+          resolve(res?.[AFFILIATE_CACHE_KEY_V2]?.list || res?.[AFFILIATE_CACHE_KEY_V1] || []);
+        });
+      } else {
+        const v2 = localStorage.getItem(AFFILIATE_CACHE_KEY_V2);
+        resolve(v2 ? JSON.parse(v2)?.list || [] : []);
+      }
+    });
+    const cleanList = Array.isArray(cached)
+      ? cached.filter(x => Boolean(x) && typeof x === "object" && !Array.isArray(x))
+      : [];
+    if (cleanList.length > 0) {
+      cachedAffiliateList = cleanList;
+    }
+  }
+
   setAffiliateStatus("Đang tìm tab Shopee Affiliate...");
   const tabs = await chrome.tabs.query({ url: "*://affiliate.shopee.vn/*" });
   if (!tabs || tabs.length === 0) {
@@ -911,11 +1100,16 @@ async function fetchAffiliateLive() {
         let csrfToken = null;
         let tokenLookupDone = false;
         let gql403Count = 0;
+        let payoutIncomplete = false;
+        let payoutSuccess = false;
+        let payoutTotalCount = null;
         try {
           const PAGE_LIMIT = 20;
-          let totalCount = 0;
           for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
-            if (gql403Count >= 2) break; // circuit breaker anti-bot
+            if (gql403Count >= 2) {
+              payoutIncomplete = true;
+              break; // circuit breaker anti-bot
+            }
             if (pageNum > 1) await sleepJitter(400, 1200);
             const callGql = async (withCsrf) => {
               const headers = Object.assign({}, baseHeaders);
@@ -938,7 +1132,7 @@ async function fetchAffiliateLive() {
               return { status: res.status, json: json };
             };
 
-            let r = await callGql(false);
+            let r = await callGql(Boolean(csrfToken));
             let node = r.json?.data?.getPaymentPayoutBillingList;
             if (!node && (r.status === 403 || r.status === 401)) {
               gql403Count++;
@@ -961,25 +1155,66 @@ async function fetchAffiliateLive() {
               if (gql403Count >= 2) {
                 gqlIssues.push("Dừng GraphQL sau 2 lỗi 403/401 (chống anti-bot) - chỉ dùng Billing List, thử lại sau ít nhất 1 giờ.");
               }
+              payoutIncomplete = true;
               break;
             }
-            const pList = Array.isArray(node.payoutList) ? node.payoutList : [];
+            if (Array.isArray(r.json?.errors) && r.json.errors.length > 0) {
+              const errs = r.json.errors.map(e => e.message).join("; ");
+              gqlIssues.push(`GraphQL partial errors: ${errs}`);
+              payoutIncomplete = true;
+            }
+            const pList = Array.isArray(node.payoutList) ? node.payoutList : null;
+            if (!pList) {
+              gqlIssues.push("Dữ liệu Payout không đúng cấu trúc.");
+              payoutIncomplete = true;
+              break;
+            }
             let newItems = 0;
             for (const it of pList) {
               const pid = it?.paymentPayout?.payoutId || it?.payoutId;
-              if (!pid || seenPayoutIds.has(pid)) continue;
-              seenPayoutIds.add(pid);
+              const normPid = pid !== undefined && pid !== null && String(pid).trim() !== "" ? String(pid).trim() : null;
+              if (!normPid || seenPayoutIds.has(normPid)) continue;
+              seenPayoutIds.add(normPid);
               payouts.push(it);
               newItems++;
             }
-            const total = parseInt(node.pagination?.totalCount || 0, 10) || 0;
-            if (total > 0) totalCount = total;
-            if (newItems === 0) break;
-            if (totalCount > 0 && payouts.length >= totalCount) break;
-            if (pList.length === 0) break;
+            const total = parseInt(node.pagination?.totalCount, 10);
+            if (!isNaN(total)) payoutTotalCount = total;
+
+            if (pageNum === 1) {
+              payoutSuccess = true;
+            }
+
+            if (payoutTotalCount === 0) break;
+            if (payoutTotalCount !== null && payoutTotalCount > 0 && payouts.length >= payoutTotalCount) break;
+
+            if (pList.length === 0 || newItems === 0) {
+              if (payoutTotalCount !== null && payoutTotalCount > 0 && payouts.length < payoutTotalCount) {
+                payoutIncomplete = true;
+                gqlIssues.push(`Dừng tải sớm: nhận ${payouts.length}/${payoutTotalCount} bản ghi Payout.`);
+              }
+              break;
+            }
+
+            if (payoutTotalCount === null) {
+              const actualPageSize = parseInt(node.pagination?.pageSize || node.pageSize || 0, 10) || 50;
+              if (pList.length < actualPageSize) break;
+            }
+
+            if (pageNum === PAGE_LIMIT) {
+              if (payoutTotalCount === null || payouts.length < payoutTotalCount) {
+                payoutIncomplete = true;
+                gqlIssues.push("Đạt giới hạn 20 trang Payout.");
+              }
+            }
+          }
+
+          if (payoutTotalCount !== null && payoutTotalCount > 0 && payouts.length < payoutTotalCount) {
+            payoutIncomplete = true;
           }
         } catch (err) {
           gqlIssues.push(err.message);
+          payoutIncomplete = true;
         }
 
         // 2. Billing List theo ngày hoàn thành đơn (kê khai + các tháng không có payout)
@@ -994,6 +1229,11 @@ async function fetchAffiliateLive() {
 
         // 3. GraphQL getPaymentSummaryBillFeeInvoiceList - Hóa đơn phí dịch vụ điện tử (service_fee_invoice)
         const feeInvoices = [];
+        const seenFeeKeys = new Set();
+        const feeIssues = [];
+        let feeTotalCount = null;
+        let feeIncomplete = false;
+
         const FEE_INVOICE_QUERY = `
           query GetPaymentSummaryBillFeeInvoiceListQuery($pageNum: Int, $pageSize: Int, $serviceFeeInvoiceFilter: ServiceFeeInvoiceFilterInput) {
             getPaymentSummaryBillFeeInvoiceList(pageNum: $pageNum, pageSize: $pageSize, serviceFeeInvoiceFilter: $serviceFeeInvoiceFilter) {
@@ -1013,7 +1253,15 @@ async function fetchAffiliateLive() {
             }
           }`;
         try {
-          if (gql403Count < 2) {
+          const PAGE_LIMIT = 20;
+          for (let pageNum = 1; pageNum <= PAGE_LIMIT; pageNum++) {
+            if (gql403Count >= 2) {
+              feeIssues.push("Dừng tải hóa đơn phí DV sau 2 lỗi 403/401 (circuit breaker).");
+              feeIncomplete = true;
+              break;
+            }
+            if (pageNum > 1) await sleepJitter(400, 1200);
+
             const callFeeGql = async (withCsrf) => {
               const headers = Object.assign({}, baseHeaders);
               if (withCsrf && csrfToken) headers["CSRF-token"] = csrfToken;
@@ -1023,71 +1271,289 @@ async function fetchAffiliateLive() {
                 body: JSON.stringify({
                   operationName: "GetPaymentSummaryBillFeeInvoiceListQuery",
                   query: FEE_INVOICE_QUERY,
-                  variables: { pageSize: 50, pageNum: 1, serviceFeeInvoiceFilter: {} }
+                  variables: { pageSize: 50, pageNum: pageNum, serviceFeeInvoiceFilter: {} }
                 })
               });
+              const fresh = res.headers && res.headers.get ? res.headers.get("csrf-token") : null;
+              if (fresh) csrfToken = fresh;
               let json = null;
               try { json = await res.json(); } catch (_) {}
               return { status: res.status, json: json };
             };
 
-            let r = await callFeeGql(false);
+            let r = await callFeeGql(Boolean(csrfToken));
             let node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
-            if (!node && (r.status === 403 || r.status === 401) && csrfToken) {
-              r = await callFeeGql(true);
-              node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+            if (!node && (r.status === 403 || r.status === 401)) {
+              gql403Count++;
+              if (!tokenLookupDone) {
+                tokenLookupDone = true;
+                csrfToken = csrfToken || (await discoverCsrfToken());
+              }
+              if (csrfToken) {
+                r = await callFeeGql(true);
+                node = r.json?.data?.getPaymentSummaryBillFeeInvoiceList;
+                if (!node && (r.status === 403 || r.status === 401)) gql403Count++;
+              }
             }
-            if (Array.isArray(node?.paymentSummaryBillFeeInvoices)) {
-              for (const inv of node.paymentSummaryBillFeeInvoices) {
-                feeInvoices.push({
-                  isFeeInvoice: true,
-                  paymentCompletePeriodStartTime: inv.paymentCompletePeriodStartTime,
-                  paymentCompletePeriodEndTime: inv.paymentCompletePeriodEndTime,
-                  totalServiceFee: inv.totalServiceFee,
-                  invoiceNumber: inv.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || ""
-                });
+
+            if (!node) {
+              const errs = Array.isArray(r.json?.errors)
+                ? r.json.errors.map(e => e.message).join("; ")
+                : (r.json?.msg || r.json?.error_message || `HTTP ${r.status}`);
+              feeIssues.push(String(errs));
+              feeIncomplete = true;
+              break;
+            }
+
+            if (Array.isArray(r.json?.errors) && r.json.errors.length > 0) {
+              const errs = r.json.errors.map(e => e.message).join("; ");
+              feeIssues.push(`GraphQL partial errors: ${errs}`);
+              feeIncomplete = true;
+            }
+
+            const invList = Array.isArray(node.paymentSummaryBillFeeInvoices) ? node.paymentSummaryBillFeeInvoices : null;
+            if (!invList) {
+              feeIssues.push("Dữ liệu hóa đơn phí DV không đúng cấu trúc.");
+              feeIncomplete = true;
+              break;
+            }
+
+            const rawTotal = parseInt(node.totalCount, 10);
+            if (!isNaN(rawTotal)) feeTotalCount = rawTotal;
+
+            let newItems = 0;
+            for (const inv of invList) {
+              const invNum = inv.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || inv.invoiceNumber || "";
+              const periodStart = inv.paymentCompletePeriodStartTime || "";
+              const dedupKey = invNum ? `${periodStart}_${invNum}` : `${periodStart}_${inv.totalServiceFee ?? 0}`;
+              if (seenFeeKeys.has(dedupKey)) continue;
+              seenFeeKeys.add(dedupKey);
+
+              feeInvoices.push({
+                isFeeInvoice: true,
+                paymentCompletePeriodStartTime: inv.paymentCompletePeriodStartTime,
+                paymentCompletePeriodEndTime: inv.paymentCompletePeriodEndTime,
+                totalServiceFee: inv.totalServiceFee,
+                invoiceNumber: invNum
+              });
+              newItems++;
+            }
+
+            if (feeTotalCount === 0) break;
+            if (feeTotalCount !== null && feeTotalCount > 0 && feeInvoices.length >= feeTotalCount) break;
+
+            if (invList.length === 0 || newItems === 0) {
+              if (feeTotalCount !== null && feeTotalCount > 0 && feeInvoices.length < feeTotalCount) {
+                feeIncomplete = true;
+                feeIssues.push(`Dừng tải sớm: nhận ${feeInvoices.length}/${feeTotalCount} bản ghi.`);
+              }
+              break;
+            }
+
+            if (feeTotalCount === null) {
+              const actualPageSize = parseInt(node.pageSize || 0, 10) || 50;
+              if (invList.length < actualPageSize) break;
+            }
+
+            if (pageNum === PAGE_LIMIT) {
+              if (feeTotalCount === null || feeInvoices.length < feeTotalCount) {
+                feeIncomplete = true;
+                feeIssues.push("Đạt giới hạn 20 trang hóa đơn phí DV.");
               }
             }
           }
-        } catch (_) {}
 
-        return { payouts, billingData, feeInvoices, gqlIssues: gqlIssues.join(" | ") };
+          if (feeTotalCount !== null && feeTotalCount > 0 && feeInvoices.length < feeTotalCount) {
+            feeIncomplete = true;
+            if (!feeIssues.some(s => s.includes("Chưa tải đủ") || s.includes("Dừng tải sớm"))) {
+              feeIssues.push(`Chưa tải đủ hóa đơn phí DV (${feeInvoices.length}/${feeTotalCount}).`);
+            }
+          }
+        } catch (err) {
+          feeIssues.push(err.message);
+          feeIncomplete = true;
+        }
+
+        return {
+          payouts,
+          billingData,
+          feeInvoices,
+          payoutSuccess,
+          payoutIncomplete,
+          payoutTotalCount,
+          gqlIssues: gqlIssues.join(" | "),
+          feeIssues: feeIssues.join(" | "),
+          feeIncomplete,
+          feeTotalCount
+        };
       },
       args: [s, e]
     });
 
     const res = results?.[0]?.result;
-    const payouts = res && Array.isArray(res.payouts) ? res.payouts : [];
-    const billingList = res?.billingData?.code === 0 && Array.isArray(res.billingData.data?.list)
-      ? res.billingData.data.list : [];
-    const feeInvoices = res && Array.isArray(res.feeInvoices) ? res.feeInvoices : [];
+    const hasValidPayoutsArray = Array.isArray(res?.payouts);
+    const payouts = hasValidPayoutsArray ? res.payouts : [];
+    const isPayoutSuccess = res?.payoutSuccess === true && hasValidPayoutsArray;
+    const payoutIncomplete = res?.payoutIncomplete === true || res?.payoutIncomplete === "true";
+    const prevPayouts = (cachedAffiliateList || []).filter(x => x && (x.paymentPayout || x.payoutId || x.payoutCreatedTime || x.payArrivalTime) && !x.isFeeInvoice);
+    const getPayoutId = (it) => {
+      const raw = it?.paymentPayout?.payoutId ?? it?.payoutId;
+      return raw !== undefined && raw !== null && String(raw).trim() !== "" ? String(raw).trim() : null;
+    };
 
-    if (payouts.length === 0 && billingList.length === 0) {
-      const detail = res?.gqlIssues || res?.billingData?.msg || "Kiểm tra đăng nhập Shopee Affiliate.";
+    let finalPayouts = [];
+    let payoutWarning = "";
+    let retainedPayoutsCount = 0;
+
+    if (isPayoutSuccess && !payoutIncomplete) {
+      finalPayouts = payouts;
+    } else if (payouts.length > 0) {
+      const newIds = new Set(payouts.map(getPayoutId).filter(Boolean));
+      const retained = prevPayouts.filter(x => {
+        const id = getPayoutId(x);
+        return id ? !newIds.has(id) : true;
+      });
+      finalPayouts = [...payouts, ...retained];
+      retainedPayoutsCount = retained.length;
+      payoutWarning = `Chưa tải đủ kỳ thanh toán Payout Record (${payouts.length}${res?.payoutTotalCount ? '/' + res.payoutTotalCount : ''}: ${res?.gqlIssues || "lỗi kết nối"}). Giữ lại ${retained.length} kỳ cũ không trùng.`;
+    } else if (prevPayouts.length > 0) {
+      finalPayouts = prevPayouts;
+      retainedPayoutsCount = prevPayouts.length;
+      payoutWarning = `Không thể làm mới kỳ thanh toán Payout Record (${res?.gqlIssues ? `Payout lỗi: ${res.gqlIssues}` : "thiếu dữ liệu Payout"}). Giữ lại ${prevPayouts.length} kỳ cũ.`;
+    } else {
+      finalPayouts = [];
+      if (!isPayoutSuccess || payoutIncomplete) {
+        payoutWarning = res?.gqlIssues ? `Payout lỗi: ${res.gqlIssues}` : "Không lấy được kỳ Payout Record";
+      }
+    }
+
+    const isBillingSuccess = res?.billingData && res.billingData.code === 0 && Array.isArray(res.billingData.data?.list) && res.billingData.data.list.every(x => Boolean(x) && typeof x === "object" && !Array.isArray(x));
+    const newBillingList = isBillingSuccess ? res.billingData.data.list : null;
+    const billingErr = !isBillingSuccess
+      ? (res?.billingData?.error || res?.billingData?.msg || (res?.billingData ? `Mã lỗi Billing: ${res.billingData.code}` : "Lỗi tải Billing List"))
+      : "";
+
+    const prevBilling = (cachedAffiliateList || []).filter(x => !x.paymentPayout && !x.payoutId && !x.payoutCreatedTime && !x.payArrivalTime && !x.isFeeInvoice && x.order_completed_period_start_time);
+    let finalBillingList = [];
+    let billingWarning = "";
+
+    if (isBillingSuccess) {
+      finalBillingList = newBillingList;
+    } else {
+      finalBillingList = prevBilling;
+      billingWarning = `Không thể làm mới doanh thu theo ngày (${billingErr}). Giữ lại ${prevBilling.length} bản ghi cũ.`;
+    }
+
+    const newFeeInvoices = res && Array.isArray(res.feeInvoices) ? res.feeInvoices : [];
+    const feeIncomplete = !!res?.feeIncomplete;
+    const feeIssues = res?.feeIssues || "";
+
+    // 0-guard: Only guard against wipeout when NOT authoritative success for both revenue APIs
+    const isBothRevenueAuthoritative = isPayoutSuccess && !payoutIncomplete && isBillingSuccess;
+    if (finalPayouts.length === 0 && finalBillingList.length === 0 && !isBothRevenueAuthoritative) {
+      const detail = res?.gqlIssues || billingErr || res?.billingData?.msg || "Kiểm tra đăng nhập Shopee Affiliate.";
       setAffiliateStatus("Không tải được dữ liệu: " + detail, "error");
       return;
     }
 
-    cachedAffiliateList = [...payouts, ...billingList, ...feeInvoices];
+    // Bảo toàn hóa đơn phí DV đã biết nếu đồng bộ mới bị lỗi/không khả dụng
+    const prevInvoices = (cachedAffiliateList || []).filter(x => x.isFeeInvoice);
+    let finalFeeInvoices = [];
+    if (newFeeInvoices.length > 0) {
+      if (feeIncomplete && prevInvoices.length > 0) {
+        const getFeeMonthKey = (it) => {
+          if (it.monthKey) return it.monthKey;
+          const s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
+          if (s) {
+            const dt = new Date(s * 1000 + 7 * 3600000);
+            return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
+          }
+          return null;
+        };
+        const newMonths = new Set(newFeeInvoices.map(getFeeMonthKey).filter(Boolean));
+        const keptPrev = prevInvoices.filter(x => !newMonths.has(getFeeMonthKey(x)));
+        finalFeeInvoices = [...newFeeInvoices, ...keptPrev];
+      } else {
+        finalFeeInvoices = newFeeInvoices;
+      }
+    } else if (prevInvoices.length > 0) {
+      if (res?.feeTotalCount === 0 && !feeIncomplete) {
+        finalFeeInvoices = [];
+      } else {
+        finalFeeInvoices = prevInvoices;
+      }
+    }
+
+    cachedAffiliateList = [...finalPayouts, ...finalBillingList, ...finalFeeInvoices];
+    const cacheWarnings = [];
+    if (payoutWarning) cacheWarnings.push(payoutWarning);
+    if (billingWarning) cacheWarnings.push(billingWarning);
+    if (feeIncomplete && feeIssues) cacheWarnings.push(`HĐ phí DV chưa đầy đủ: ${feeIssues}`);
+    if (finalPayouts.length === 0 && (!isPayoutSuccess || payoutIncomplete || res?.gqlIssues)) {
+      if (!cacheWarnings.some(w => w.includes("Payout"))) {
+        cacheWarnings.push(res?.gqlIssues ? `Payout lỗi: ${res.gqlIssues}` : "Không lấy được kỳ Payout Record");
+      }
+    }
+
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({
+      await chrome.storage.local.set({
         [AFFILIATE_CACHE_KEY_V2]: {
           updatedAt: Date.now(),
-          list: cachedAffiliateList
+          list: cachedAffiliateList,
+          warnings: cacheWarnings
         }
       });
     }
-    loadAffiliateSummary();
-    const feeNote = feeInvoices.length > 0 ? ` + ${feeInvoices.length} HĐ phí DV` : "";
-    if (payouts.length > 0) {
-      setAffiliateStatus(`Đã đồng bộ ${payouts.length} kỳ thanh toán (Payout Record) + ${billingList.length} bản ghi Billing List${feeNote} thành công!`, "success");
-    } else {
-      setAffiliateStatus(`Đã đồng bộ ${billingList.length} bản ghi Billing List${feeNote} thành công!`, "success");
+    await loadAffiliateSummary();
+
+    let feeNote = "";
+    if (newFeeInvoices.length > 0 && !feeIncomplete) {
+      feeNote = ` + ${newFeeInvoices.length} HĐ phí DV`;
+    } else if (newFeeInvoices.length > 0 && feeIncomplete) {
+      feeNote = ` + ${newFeeInvoices.length} HĐ phí DV (chưa đầy đủ: ${feeIssues || "lỗi kết nối"})`;
+    } else if (prevInvoices.length > 0 && (feeIssues || feeIncomplete)) {
+      feeNote = ` + giữ lại ${prevInvoices.length} HĐ phí DV đã lưu (đồng bộ mới không khả dụng: ${feeIssues})`;
+    } else if (feeIssues) {
+      feeNote = ` (HĐ phí DV lỗi: ${feeIssues})`;
     }
-    if (payouts.length === 0) {
-      setAffiliateStatus("Cảnh báo: không lấy được kỳ thanh toán từ Payout Record"
+
+    let billingNote = "";
+    if (isBillingSuccess) {
+      billingNote = ` + ${finalBillingList.length} bản ghi ngày hoàn thành`;
+    } else if (prevBilling.length > 0) {
+      billingNote = ` + giữ lại ${prevBilling.length} bản ghi ngày hoàn thành cũ`;
+    }
+
+    let mainMsg = "";
+    if (isPayoutSuccess && !payoutIncomplete) {
+      if (payouts.length > 0) {
+        mainMsg = `Đã đồng bộ ${payouts.length} kỳ thanh toán (Payout Record)${billingNote}${feeNote} thành công!`;
+      } else {
+        mainMsg = `Đã đồng bộ dữ liệu (0 kỳ thanh toán)${billingNote}${feeNote} thành công!`;
+      }
+    } else if (payouts.length > 0) {
+      mainMsg = `Đã đồng bộ ${payouts.length} kỳ thanh toán mới (chưa đầy đủ)${retainedPayoutsCount > 0 ? `, giữ lại ${retainedPayoutsCount} kỳ cũ` : ""}${billingNote}${feeNote}.`;
+    } else if (prevPayouts.length > 0) {
+      mainMsg = `Đã đồng bộ dữ liệu + giữ lại ${prevPayouts.length} kỳ thanh toán cũ (đồng bộ mới không khả dụng: ${res?.gqlIssues || "thiếu dữ liệu Payout"})${billingNote}${feeNote}.`;
+    } else {
+      mainMsg = `Đã đồng bộ dữ liệu${billingNote}${feeNote}.`;
+    }
+    if (billingWarning) {
+      mainMsg += ` (${billingWarning})`;
+    }
+    if (!isPayoutSuccess) {
+      const warn = " Cảnh báo: không lấy được kỳ thanh toán từ Payout Record"
         + (res?.gqlIssues ? ` (${res.gqlIssues})` : "")
-        + ". Số liệu tháng mới hiển thị theo ngày hoàn thành đơn.", "error");
+        + (prevPayouts.length > 0 ? ` - đã giữ lại ${prevPayouts.length} kỳ cũ.` : ". Số liệu tháng mới hiển thị theo ngày hoàn thành đơn.");
+      setAffiliateStatus(mainMsg + warn, "error");
+    } else if (payoutIncomplete) {
+      const warn = ` Cảnh báo: chưa tải đủ kỳ thanh toán từ Payout Record (${payouts.length}${res?.payoutTotalCount ? '/' + res.payoutTotalCount : ''})`
+        + (res?.gqlIssues ? ` (${res.gqlIssues})` : "")
+        + ".";
+      setAffiliateStatus(mainMsg + warn, "error");
+    } else {
+      const statusType = (!feeIncomplete && isBillingSuccess) ? "success" : "normal";
+      setAffiliateStatus(mainMsg, statusType);
     }
   } catch (err) {
     setAffiliateStatus("Lỗi kết nối tab: " + err.message, "error");
