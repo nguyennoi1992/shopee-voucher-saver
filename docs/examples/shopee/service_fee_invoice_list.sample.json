@@ -1,0 +1,254 @@
+{
+  "data": {
+    "getPaymentSummaryBillFeeInvoiceList": {
+      "pageNum": 1,
+      "pageSize": 10,
+      "paymentSummaryBillFeeInvoices": [
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1788282000",
+          "paymentCompletePeriodEndTime": "1790873999",
+          "totalServiceFee": "449900000",
+          "validationId": "DEMO_VALIDATION_2026-09",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-09.pdf",
+              "invoiceNumber": "DEMO_INV_2026-09",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-09.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-09",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1785603600",
+          "paymentCompletePeriodEndTime": "1788281999",
+          "totalServiceFee": "651700000",
+          "validationId": "DEMO_VALIDATION_2026-08",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-08.pdf",
+              "invoiceNumber": "DEMO_INV_2026-08",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-08.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-08",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1782925200",
+          "paymentCompletePeriodEndTime": "1785603599",
+          "totalServiceFee": "443700000",
+          "validationId": "DEMO_VALIDATION_2026-07",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-07.pdf",
+              "invoiceNumber": "DEMO_INV_2026-07",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-07.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-07",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1780333200",
+          "paymentCompletePeriodEndTime": "1782925199",
+          "totalServiceFee": "337100000",
+          "validationId": "DEMO_VALIDATION_2026-06",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-06.pdf",
+              "invoiceNumber": "DEMO_INV_2026-06",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-06.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-06",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1777654800",
+          "paymentCompletePeriodEndTime": "1780333199",
+          "totalServiceFee": "634900000",
+          "validationId": "DEMO_VALIDATION_2026-05",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-05.pdf",
+              "invoiceNumber": "DEMO_INV_2026-05",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-05.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-05",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1775062800",
+          "paymentCompletePeriodEndTime": "1777654799",
+          "totalServiceFee": "570900000",
+          "validationId": "DEMO_VALIDATION_2026-04",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-04.pdf",
+              "invoiceNumber": "DEMO_INV_2026-04",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-04.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-04",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1772384400",
+          "paymentCompletePeriodEndTime": "1775062799",
+          "totalServiceFee": "976700000",
+          "validationId": "DEMO_VALIDATION_2026-03",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-03.pdf",
+              "invoiceNumber": "DEMO_INV_2026-03",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-03.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-03",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1769965200",
+          "paymentCompletePeriodEndTime": "1772384399",
+          "totalServiceFee": "683800000",
+          "validationId": "DEMO_VALIDATION_2026-02",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-02.pdf",
+              "invoiceNumber": "DEMO_INV_2026-02",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-02.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-02",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        },
+        {
+          "affiliateId": "DEMO_AFFILIATE",
+          "affiliateName": "demo_affiliate",
+          "billFeeStatus": 2,
+          "paymentCompletePeriodStartTime": "1767286800",
+          "paymentCompletePeriodEndTime": "1769965199",
+          "totalServiceFee": "1199900000",
+          "validationId": "DEMO_VALIDATION_2026-01",
+          "paymentSummaryBillFeeInvoices": [
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-01.pdf",
+              "invoiceNumber": "DEMO_INV_2026-01",
+              "invoiceStatus": 6,
+              "invoiceType": 54,
+              "rejectReason": ""
+            },
+            {
+              "dismissReason": "",
+              "fileUrl": "redacted/invoice_2026-01.xlsx",
+              "invoiceNumber": "DEMO_INV_2026-01",
+              "invoiceStatus": 6,
+              "invoiceType": 57,
+              "rejectReason": ""
+            }
+          ]
+        }
+      ],
+      "totalCount": 9
+    }
+  }
+}

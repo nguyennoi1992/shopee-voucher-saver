@@ -23,6 +23,28 @@
     return Math.round(num / 100000);
   }
 
+  // Đọc số tiền chuẩn xác từ response Shopee:
+  // - Nếu trường _dis có mặt: ưu tiên _dis (giá trị VND, 0 là hợp lệ), hỗ trợ định dạng số nguyên hoặc phân tách chấm hàng nghìn
+  // - Nếu không có _dis (bị xóa hoặc feed raw only): chia 100.000 từ raw integer
+  function readMoneyAmount(disVal, rawVal) {
+    if (disVal !== undefined && disVal !== null) {
+      if (typeof disVal === "number") {
+        return Number.isFinite(disVal) && disVal >= 0 ? disVal : 0;
+      }
+      const s = String(disVal).trim();
+      if (s !== "") {
+        if (/^\d+$/.test(s)) return Number(s);
+        if (/^\d{1,3}(?:\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ""));
+        const n = Number(s.replace(/,/g, "."));
+        if (Number.isFinite(n) && n >= 0) return n;
+      }
+    }
+    if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== "") {
+      return decScale(rawVal);
+    }
+    return 0;
+  }
+
   // Phân rã 1 kỳ thanh toán (bill) theo đúng chuẩn đối soát 10/2026:
   // Gross (tiền sàn trả) - Phí DV 0,98% = Doanh thu hợp lệ; Doanh thu hợp lệ - 5% VAT - 5% PIT = Thực nhận.
   // Suy luận khấu trừ từ chênh lệch (gross - paid) vì API thật chỉ trả 2 số này:
@@ -76,13 +98,21 @@
     }
 
     const billTotal = Math.max(0, afterMcn - fee);
-    const net = paid > 0 ? paid : Math.max(0, billTotal - vat - pit - wht10);
+    const hasExplicitPaid = (p.totalPaymentAmount !== undefined && p.totalPaymentAmount !== null && String(p.totalPaymentAmount).trim() !== "");
+    const net = hasExplicitPaid ? paid : Math.max(0, billTotal - vat - pit - wht10);
     return { gross, mcn, fee, vat, pit, wht10, billTotal, net };
   }
 
   // DOM Elements
-  const fromMonthSelect = document.getElementById("select-from-month");
-  const toMonthSelect = document.getElementById("select-to-month");
+  const fromDateInput = document.getElementById("input-from-date");
+  const toDateInput = document.getElementById("input-to-date");
+  const fromDateText = document.getElementById("input-from-date-text");
+  const toDateText = document.getElementById("input-to-date-text");
+  const fromDateError = document.getElementById("input-from-date-error");
+  const toDateError = document.getElementById("input-to-date-error");
+  const btnFromCalendar = document.getElementById("btn-from-calendar");
+  const btnToCalendar = document.getElementById("btn-to-calendar");
+
   const taxModeSelect = document.getElementById("select-tax-mode");
   const fetchLiveBtn = document.getElementById("btn-fetch-live");
   const clearCacheBtn = document.getElementById("btn-clear-cache");
@@ -115,7 +145,16 @@
   const s1aInputTaxCode = document.getElementById("s1a-input-taxcode");
   const s1aInputLocation = document.getElementById("s1a-input-location");
   const s1aSelectGrouping = document.getElementById("s1a-select-grouping");
+  const selectPayoutRecon = document.getElementById("select-payout-recon");
+  const btnOpenPayoutRecon = document.getElementById("btn-open-payout-recon");
+  const dialogPayoutRecon = document.getElementById("dialog-payout-recon");
+  const payoutReconTitle = document.getElementById("payout-recon-title");
+  const payoutReconBody = document.getElementById("payout-recon-body");
+  const btnClosePayoutRecon = document.getElementById("btn-close-payout-recon");
+  const btnClosePayoutReconFooter = document.getElementById("btn-close-payout-recon-footer");
   const s1aSaveProfileBtn = document.getElementById("btn-s1a-save-profile");
+  const s1aExportExcelBtn = document.getElementById("btn-s1a-export-excel");
+  const s1aExportDocxBtn = document.getElementById("btn-s1a-export-docx");
   const s1aPrintBtn = document.getElementById("btn-s1a-print");
   const s1aSheetWrapper = document.getElementById("s1a-sheet-wrapper");
   const s1aSheet = document.getElementById("s1a-sheet");
@@ -136,12 +175,28 @@
 
   // Utilities
   function formatVnd(num) {
-    if (typeof num !== "number" || isNaN(num)) return "0";
+    if (num === null || num === undefined) return "-";
+    if (typeof num !== "number" || isNaN(num)) return "-";
     return new Intl.NumberFormat("vi-VN").format(Math.round(num));
   }
 
+  function formatDateVn(dateStr) {
+    if (!dateStr || typeof dateStr !== "string") return "";
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+
   function getDaysInMonth(year, month) {
-    return new Date(year, month, 0).getDate();
+    return new Date(Date.UTC(year, month, 0)).getUTCDate();
+  }
+
+  function isValidDateString(str) {
+    if (typeof str !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+    const [y, m, d] = str.split("-").map(Number);
+    if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === (m - 1) && dt.getUTCDate() === d;
   }
 
   function parseEpochToGmt7(sec) {
@@ -157,6 +212,194 @@
     };
   }
 
+  function formatIsoToDmy(isoStr) {
+    if (!isoStr || typeof isoStr !== "string") return "";
+    const parts = isoStr.trim().split("-");
+    if (parts.length !== 3) return "";
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+
+  function parseDmyToIso(str) {
+    if (!str || typeof str !== "string") return "";
+    const s = str.trim();
+    if (!s) return "";
+    const match = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (!match) return null;
+    const d = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const y = parseInt(match[3], 10);
+    if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1) return null;
+    const daysInM = getDaysInMonth(y, m);
+    if (d > daysInM) return null;
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  function formatMonthLabel(mKey) {
+    if (!mKey || typeof mKey !== "string") return "";
+    const parts = mKey.trim().split("-");
+    if (parts.length < 2) return mKey;
+    return `${parts[1]}/${parts[0]}`;
+  }
+
+  function formatEpochDateTime(sec) {
+    if (!sec) return "(không xác định)";
+    const s = parseInt(sec || 0, 10);
+    if (!s || isNaN(s)) return "(không xác định)";
+    const dt = parseEpochToGmt7(s);
+    const d = String(dt.getDate()).padStart(2, "0");
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const y = dt.getFullYear();
+    const dateObj = new Date(s * 1000 + 7 * 3600000);
+    const hh = String(dateObj.getUTCHours()).padStart(2, "0");
+    const mm = String(dateObj.getUTCMinutes()).padStart(2, "0");
+    const ss = String(dateObj.getUTCSeconds()).padStart(2, "0");
+    return `${d}/${m}/${y} ${hh}:${mm}:${ss}`;
+  }
+
+  function formatEpochDateOnly(sec) {
+    if (!sec) return "(không xác định)";
+    const s = parseInt(sec || 0, 10);
+    if (!s || isNaN(s)) return "(không xác định)";
+    const dt = parseEpochToGmt7(s);
+    const d = String(dt.getDate()).padStart(2, "0");
+    const m = String(dt.getMonth() + 1).padStart(2, "0");
+    const y = dt.getFullYear();
+    return `${d}/${m}/${y}`;
+  }
+
+  function syncIsoToText(canonicalEl, textEl, errorEl) {
+    if (!canonicalEl || !textEl) return;
+    const val = canonicalEl.value;
+    if (val && isValidDateString(val)) {
+      textEl.value = formatIsoToDmy(val);
+      textEl.classList.remove("is-invalid");
+      if (errorEl) {
+        errorEl.classList.remove("active");
+        errorEl.textContent = "";
+      }
+      delete canonicalEl.dataset.hasParseError;
+    } else if (!val) {
+      if (!canonicalEl.dataset.hasParseError) {
+        textEl.value = "";
+        textEl.classList.remove("is-invalid");
+        if (errorEl) {
+          errorEl.classList.remove("active");
+          errorEl.textContent = "";
+        }
+      }
+    }
+  }
+
+  function setupDateInputPair(canonicalEl, textEl, errorEl, btnEl) {
+    if (!canonicalEl) return;
+
+    if (btnEl) {
+      btnEl.addEventListener("click", () => {
+        if (typeof canonicalEl.showPicker === "function") {
+          try {
+            canonicalEl.showPicker();
+            return;
+          } catch (e) {
+            // fallback
+          }
+        }
+        canonicalEl.focus();
+        canonicalEl.click();
+      });
+    }
+
+    if (textEl) {
+      const handleInput = () => {
+        const raw = textEl.value.trim();
+        if (!raw) {
+          delete canonicalEl.dataset.hasParseError;
+          textEl.classList.remove("is-invalid");
+          if (errorEl) {
+            errorEl.classList.remove("active");
+            errorEl.textContent = "";
+          }
+          if (canonicalEl.value !== "") {
+            canonicalEl.value = "";
+            handleFilterChange();
+          }
+          return;
+        }
+
+        if (raw.length < 10) {
+          canonicalEl.dataset.hasParseError = "true";
+          return;
+        }
+
+        const iso = parseDmyToIso(raw);
+        if (iso) {
+          delete canonicalEl.dataset.hasParseError;
+          textEl.classList.remove("is-invalid");
+          if (errorEl) {
+            errorEl.classList.remove("active");
+            errorEl.textContent = "";
+          }
+          canonicalEl.value = iso;
+          handleFilterChange();
+        } else {
+          canonicalEl.dataset.hasParseError = "true";
+          canonicalEl.value = "";
+          textEl.classList.add("is-invalid");
+          if (errorEl) {
+            errorEl.classList.add("active");
+            errorEl.textContent = "Ngày không hợp lệ (DD/MM/YYYY)";
+          }
+          handleFilterChange();
+        }
+      };
+
+      const handleCommit = () => {
+        const raw = textEl.value.trim();
+        if (!raw) {
+          delete canonicalEl.dataset.hasParseError;
+          textEl.classList.remove("is-invalid");
+          if (errorEl) {
+            errorEl.classList.remove("active");
+            errorEl.textContent = "";
+          }
+          if (canonicalEl.value !== "") {
+            canonicalEl.value = "";
+            handleFilterChange();
+          }
+          return;
+        }
+        const iso = parseDmyToIso(raw);
+        if (iso) {
+          delete canonicalEl.dataset.hasParseError;
+          textEl.classList.remove("is-invalid");
+          textEl.value = formatIsoToDmy(iso);
+          if (errorEl) {
+            errorEl.classList.remove("active");
+            errorEl.textContent = "";
+          }
+          canonicalEl.value = iso;
+          handleFilterChange();
+        } else {
+          canonicalEl.dataset.hasParseError = "true";
+          canonicalEl.value = "";
+          textEl.classList.add("is-invalid");
+          if (errorEl) {
+            errorEl.classList.add("active");
+            errorEl.textContent = "Ngày không hợp lệ (DD/MM/YYYY)";
+          }
+          handleFilterChange();
+        }
+      };
+
+      textEl.addEventListener("input", handleInput);
+      textEl.addEventListener("change", handleCommit);
+      textEl.addEventListener("blur", handleCommit);
+    }
+
+    canonicalEl.addEventListener("change", () => {
+      syncIsoToText(canonicalEl, textEl, errorEl);
+    });
+  }
+
   // Tab switching
   tabButtons.forEach(btn => {
     btn.addEventListener("click", () => {
@@ -165,6 +408,9 @@
       btn.classList.add("active");
       const target = document.getElementById(btn.dataset.tab);
       if (target) target.classList.add("active");
+      const isS1a = btn.dataset.tab === "tab-s1a";
+      if (exportExcelBtn) exportExcelBtn.style.display = isS1a ? "none" : "";
+      if (exportCsvBtn) exportCsvBtn.style.display = isS1a ? "none" : "";
     });
   });
 
@@ -327,16 +573,25 @@
           totalServiceFee: x.totalServiceFee,
           invoiceNumber: x.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || x.invoiceNumber || ""
         }));
-      } else if (parsed.data?.getPaymentPayoutBillingList?.payoutList) {
-        candidate = parsed.data.getPaymentPayoutBillingList.payoutList;
-      } else if (parsed.getPaymentPayoutBillingList?.payoutList) {
-        candidate = parsed.getPaymentPayoutBillingList.payoutList;
+      } else if (parsed.data?.getPaymentPayoutBillingList || parsed.getPaymentPayoutBillingList) {
+        const node = parsed.data?.getPaymentPayoutBillingList || parsed.getPaymentPayoutBillingList;
+        const pList = node.payoutList;
+        const pagination = node.pagination;
+        const totalCount = pagination?.totalCount !== undefined ? parseInt(String(pagination.totalCount), 10) : null;
+        if (Array.isArray(pList) && totalCount !== null && Number.isFinite(totalCount) && totalCount > pList.length) {
+          throw new Error(`Dữ liệu Payout dán vào chỉ chứa trang lẻ (${pList.length}/${totalCount} bản ghi). Vui lòng dùng tính năng làm mới đầy đủ (Fetch Live / đồng bộ online) thay vì dán trang lẻ.`);
+        }
+        candidate = pList;
       } else if (parsed.data?.payoutDetail) {
         candidate = [parsed.data.payoutDetail];
       } else if (parsed.payoutDetail) {
         candidate = [parsed.payoutDetail];
       } else if (parsed.payoutList && Array.isArray(parsed.payoutList)) {
         candidate = parsed.payoutList;
+      } else if (parsed.payoutRecord || parsed.billingRecords) {
+        candidate = [];
+        if (parsed.payoutRecord) candidate.push(parsed.payoutRecord);
+        if (Array.isArray(parsed.billingRecords)) candidate.push(...parsed.billingRecords);
       } else if (parsed.data?.list && Array.isArray(parsed.data.list)) {
         candidate = parsed.data.list;
       } else if (parsed.list && Array.isArray(parsed.list)) {
@@ -1307,28 +1562,107 @@
   clearCacheBtn.addEventListener("click", clearCacheData);
 
   // Data processing
-  function processData() {
-    // Cơ chế phân định nguồn dữ liệu đối soát:
-    //  - Mọi tháng có dữ liệu Payout Record: ưu tiên tuyệt đối Payout Record theo hoa hồng gộp (eligibleTotalAmount).
-    //  - Tháng chưa có Payout: tự động fallback theo Ngày hoàn thành đơn (Billing List) + Hóa đơn phí DV (service_fee_invoice).
+  function processData(filterFromDate, filterToDate) {
+    function getInvoiceServiceMonth(inv) {
+      if (inv.monthKey && /^\d{4}-(?:0[1-9]|1[0-2])$/.test(inv.monthKey)) {
+        return inv.monthKey;
+      }
+      const sTime = parseInt(inv.paymentCompletePeriodStartTime || 0, 10);
+      if (sTime && Number.isFinite(sTime) && sTime > 0 && sTime < 1e11) {
+        const dt = parseEpochToGmt7(sTime);
+        return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      }
+      return null;
+    }
+
+    function getDaysInMonth(year, month) {
+      return new Date(Date.UTC(year, month, 0)).getUTCDate();
+    }
+
+    function isValidDateString(str) {
+      if (typeof str !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+      const [y, m, d] = str.split("-").map(Number);
+      if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      return dt.getUTCFullYear() === y && dt.getUTCMonth() === (m - 1) && dt.getUTCDate() === d;
+    }
+
+    const fromDate = (filterFromDate && isValidDateString(filterFromDate)) ? filterFromDate : "";
+    const toDate = (filterToDate && isValidDateString(filterToDate)) ? filterToDate : "";
+
+    if (fromDate && toDate && fromDate > toDate) {
+      return {};
+    }
+
     const monthsMap = {};
     const feeInvoicesMap = {};
+    const hasInvoiceFeeMap = {};
     const seenInvoiceKeys = new Set();
 
     // 1. Rà soát danh sách Hóa đơn phí dịch vụ điện tử (service_fee_invoice)
+    // Lưu ý: totalServiceFee có thể bằng 0 (hóa đơn 0 đ là hợp lệ)
     for (const it of rawBillingList) {
-      if (it.isFeeInvoice || (it.paymentSummaryBillFeeInvoices && it.totalServiceFee) || (it.paymentCompletePeriodStartTime && it.totalServiceFee && !it.order_completed_period_start_time)) {
-        const s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
-        const mKey = it.monthKey || (s ? (() => {
-          const dt = parseEpochToGmt7(s);
-          return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
-        })() : null);
+      if (it.isFeeInvoice || (it.paymentSummaryBillFeeInvoices && it.totalServiceFee !== undefined) || (it.paymentCompletePeriodStartTime && it.totalServiceFee !== undefined && !it.order_completed_period_start_time)) {
+        const mKey = getInvoiceServiceMonth(it);
         if (!mKey) continue;
         const invId = it.invoiceNumber || it.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || "";
-        const dedupKey = invId ? `${invId}_${mKey}` : `${s || 0}_${it.totalServiceFee || 0}_${mKey}`;
+        const sTime = it.paymentCompletePeriodStartTime || 0;
+        const dedupKey = invId ? `inv_${invId}` : `${sTime}_${it.totalServiceFee ?? 0}_${mKey}`;
         if (seenInvoiceKeys.has(dedupKey)) continue;
         seenInvoiceKeys.add(dedupKey);
-        feeInvoicesMap[mKey] = (feeInvoicesMap[mKey] || 0) + decScale(it.totalServiceFee);
+        const feeVal = decScale(it.totalServiceFee);
+        feeInvoicesMap[mKey] = (feeInvoicesMap[mKey] || 0) + feeVal;
+        hasInvoiceFeeMap[mKey] = true;
+      }
+    }
+
+    // 0. Xác định các tháng có nguồn Payout gốc và nguồn Billing gốc trong raw cache
+    const rawPayoutMonths = new Set();
+    const rawBillingMonths = new Set();
+    for (const it of rawBillingList) {
+      if (!it || typeof it !== "object" || it.isFeeInvoice) continue;
+      if (it.paymentPayout || it.payoutId || it.payoutCreatedTime || it.payArrivalTime) {
+        const p = it.paymentPayout || it;
+        let rawTime = p.payoutCreatedTime ?? it.payoutCreatedTime ?? p.payArrivalTime ?? it.payArrivalTime;
+        if (rawTime === undefined || rawTime === null || String(rawTime).trim() === "") continue;
+        const numTime = Number(String(rawTime).trim());
+        if (!Number.isFinite(numTime) || numTime <= 0 || numTime >= 1e11) continue;
+        const dt = parseEpochToGmt7(Math.floor(numTime));
+        rawPayoutMonths.add(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`);
+      } else {
+        const s = it.order_completed_period_start_time;
+        if (!s) continue;
+        const dt = parseEpochToGmt7(s);
+        rawBillingMonths.add(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`);
+      }
+    }
+
+    // Khởi tạo trước các tháng có Payout thuộc phạm vi chọn với Payout = 0 (tránh bị flip sang Billing Fallback)
+    const fromM = fromDate ? fromDate.slice(0, 7) : "";
+    const toM = toDate ? toDate.slice(0, 7) : "";
+    for (const mKey of rawPayoutMonths) {
+      if ((!fromM || mKey >= fromM) && (!toM || mKey <= toM)) {
+        if (!monthsMap[mKey]) {
+          const [y, mon] = mKey.split("-").map(Number);
+          monthsMap[mKey] = createMonthEntry(y, mon);
+          monthsMap[mKey].hasPayout = true;
+          monthsMap[mKey].gross = 0;
+        }
+      }
+    }
+
+    // Khởi tạo trước các tháng có nguồn Billing gốc thuộc phạm vi chọn với hasBilling = true (tránh báo thiếu nguồn khi filter ngày không có đơn)
+    for (const mKey of rawBillingMonths) {
+      if ((!fromM || mKey >= fromM) && (!toM || mKey <= toM)) {
+        if (!monthsMap[mKey]) {
+          const [y, mon] = mKey.split("-").map(Number);
+          monthsMap[mKey] = createMonthEntry(y, mon);
+          if (rawPayoutMonths.has(mKey)) {
+            monthsMap[mKey].hasPayout = true;
+            monthsMap[mKey].gross = 0;
+          }
+        }
+        monthsMap[mKey].hasBilling = true;
       }
     }
 
@@ -1338,24 +1672,35 @@
       const s = it.order_completed_period_start_time;
       if (!s) continue;
       const dt = parseEpochToGmt7(s);
-      const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, "0");
+      const d = String(dt.getDate()).padStart(2, "0");
+      const mKey = `${y}-${m}`;
+      const dateKey = `${y}-${m}-${d}`;
       const dayNum = dt.getDate();
 
+      if (fromDate && dateKey < fromDate) continue;
+      if (toDate && dateKey > toDate) continue;
+
       if (!monthsMap[mKey]) {
-        monthsMap[mKey] = createMonthEntry(dt.getFullYear(), dt.getMonth() + 1);
+        monthsMap[mKey] = createMonthEntry(y, dt.getMonth() + 1);
+        if (rawPayoutMonths.has(mKey)) {
+          monthsMap[mKey].hasPayout = true;
+          monthsMap[mKey].gross = 0;
+        }
       }
       const mObj = monthsMap[mKey];
       mObj.hasBilling = true;
 
-      const grossAmt = parseFloat(it.eligible_total_amount_dis || it.eligible_total_amount || 0) || 0;
-      const mcnAmt = parseFloat(it.mcn_management_fee_dis || it.mcn_management_fee || 0) || 0;
-      const billTotalAmt = parseFloat(it.total_payment_amount_dis || it.total_payment_amount || 0) || 0;
-      const whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
-      const vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
-      let feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
+      const grossAmt = readMoneyAmount(it.eligible_total_amount_dis, it.eligible_total_amount);
+      const mcnAmt = readMoneyAmount(it.mcn_management_fee_dis, it.mcn_management_fee);
+      const billTotalAmt = readMoneyAmount(it.total_payment_amount_dis, it.total_payment_amount);
+      const whtAmt = readMoneyAmount(it.wht_amount_dis ?? it.pit_amount_dis, it.wht_amount ?? it.pit_amount);
+      const vatAmt = readMoneyAmount(it.vat_amount_dis, it.vat_amount);
+      let feeAmt = readMoneyAmount(it.service_fee_dis, it.service_fee);
       if (Array.isArray(it.bills)) {
         for (const b of it.bills) {
-          feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
+          feeAmt += readMoneyAmount(b.service_fee_dis, b.service_fee);
         }
       }
       if (feeAmt === 0 && billTotalAmt > 0 && (grossAmt - mcnAmt) > billTotalAmt) {
@@ -1364,17 +1709,21 @@
 
       mObj.days[dayNum] = (mObj.days[dayNum] || 0) + grossAmt;
       mObj.billingGross = (mObj.billingGross || 0) + grossAmt;
-      mObj.gross += grossAmt;
-      mObj.mcn += mcnAmt;
-      mObj.billTotal += billTotalAmt;
-      mObj.wht10 += whtAmt;
-      mObj.pit += whtAmt;
-      mObj.vat += vatAmt;
-      mObj.fee += feeAmt;
-      mObj.netPaid += billTotalAmt > 0 ? billTotalAmt : 0;
-      mObj.totalRecords++;
-      if (it.with_wht || whtAmt > 0) mObj.withWhtCount++;
-      if (it.with_vat || vatAmt > 0) mObj.withVatCount++;
+
+      // Tháng có nguồn Payout gốc: Payout là nguồn chuẩn duy nhất cho doanh thu gộp và thực nhận
+      if (!rawPayoutMonths.has(mKey)) {
+        mObj.gross += grossAmt;
+        mObj.mcn += mcnAmt;
+        mObj.billTotal += billTotalAmt;
+        mObj.wht10 += whtAmt;
+        mObj.pit += whtAmt;
+        mObj.vat += vatAmt;
+        mObj.payoutFee += feeAmt;
+        mObj.netPaid += billTotalAmt > 0 ? billTotalAmt : 0;
+        mObj.totalRecords++;
+        if (it.with_wht || whtAmt > 0) mObj.withWhtCount++;
+        if (it.with_vat || vatAmt > 0) mObj.withVatCount++;
+      }
     }
 
     // Pass 2: Payout Record theo từng kỳ chi trả thực tế (chuẩn đối soát tài chính cho mọi tháng có Payout)
@@ -1397,7 +1746,14 @@
 
       const s = Math.floor(numTime);
       const dt = parseEpochToGmt7(s);
-      const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, "0");
+      const d = String(dt.getDate()).padStart(2, "0");
+      const mKey = `${y}-${m}`;
+      const dateKey = `${y}-${m}-${d}`;
+
+      if (fromDate && dateKey < fromDate) continue;
+      if (toDate && dateKey > toDate) continue;
 
       // 2. Xác thực số tiền hoa hồng gộp
       const rawAmt = p.eligibleTotalAmount;
@@ -1416,20 +1772,18 @@
             console.warn(`Xung đột dữ liệu Payout ID ${payoutId}`);
             continue;
           }
-          // Bản ghi trùng lặp: không cộng dồn hai lần
           continue;
         }
         seenPayouts.set(payoutId, { amt, s, mKey });
       }
 
-      const d = decomposePayout(it, mKey);
+      const dObj = decomposePayout(it, mKey);
 
-      // Cho MỌI tháng có Payout: Payout Record là chuẩn đối soát tài chính
       if (!monthsMap[mKey] || !monthsMap[mKey].hasPayout) {
         const prevDays = monthsMap[mKey]?.days || {};
         const prevHasBilling = Boolean(monthsMap[mKey]?.hasBilling);
         const prevBillingGross = monthsMap[mKey]?.billingGross || 0;
-        monthsMap[mKey] = createMonthEntry(dt.getFullYear(), dt.getMonth() + 1);
+        monthsMap[mKey] = createMonthEntry(y, dt.getMonth() + 1);
         monthsMap[mKey].days = prevDays;
         monthsMap[mKey].hasBilling = prevHasBilling;
         monthsMap[mKey].billingGross = prevBillingGross;
@@ -1437,26 +1791,63 @@
       }
 
       const mObj = monthsMap[mKey];
-      // Tuyệt đối không đưa số tiền payout vào days của ngày hoàn thành đơn!
-      mObj.gross += d.gross;
-      mObj.mcn += d.mcn;
-      mObj.billTotal += d.billTotal;
-      mObj.wht10 += d.wht10;
-      mObj.vat += d.vat;
-      mObj.pit += d.pit;
-      mObj.fee += d.fee;
-      mObj.netPaid += d.net;
+      mObj.gross += dObj.gross;
+      mObj.mcn += dObj.mcn;
+      mObj.wht10 += dObj.wht10;
+      mObj.vat += dObj.vat;
+      mObj.pit += dObj.pit;
+      mObj.payoutFee += dObj.fee;
+      mObj.netPaid += dObj.net;
       mObj.totalRecords++;
-      if (d.wht10 > 0) mObj.withWhtCount++;
-      if (d.vat > 0 || d.pit > 0) mObj.withVatCount++;
+      if (dObj.wht10 > 0) mObj.withWhtCount++;
+      if (dObj.vat > 0 || dObj.pit > 0) mObj.withVatCount++;
     }
 
-    // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử từ service_fee_invoice cho các tháng hạch toán theo billing
-    // Không ghi đè các tháng đã có Payout Record thực tế (Payout ghi nhận theo ngày chi trả tiền mặt)
+    // Đảm bảo các tháng chỉ có hóa đơn (không có billing/payout) vẫn xuất hiện nếu thuộc phạm vi lọc
     for (const mKey of Object.keys(feeInvoicesMap)) {
-      if (monthsMap[mKey] && !monthsMap[mKey].hasPayout) {
-        monthsMap[mKey].fee = feeInvoicesMap[mKey];
-        monthsMap[mKey].billTotal = Math.max(0, monthsMap[mKey].gross - monthsMap[mKey].mcn - monthsMap[mKey].fee);
+      if ((!fromM || mKey >= fromM) && (!toM || mKey <= toM)) {
+        if (!monthsMap[mKey]) {
+          const [y, mon] = mKey.split("-").map(Number);
+          monthsMap[mKey] = createMonthEntry(y, mon);
+        }
+      }
+    }
+
+    // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử AUTHORITATIVE (service_fee_invoice)
+    // Áp dụng cho TẤT CẢ các tháng (kể cả có Payout Record thực tế)
+    // Actual zero invoice (fee = 0) là hợp lệ
+    // Tháng không có hóa đơn: fee = null ("Chưa có HĐ" / pending, không gán 0 và không suy đoán 0.98%)
+    for (const mKey of Object.keys(monthsMap)) {
+      const mObj = monthsMap[mKey];
+      const [y, mon] = mKey.split("-").map(Number);
+      const daysInM = getDaysInMonth(y, mon);
+      const mStart = `${mKey}-01`;
+      const mEnd = `${mKey}-${String(daysInM).padStart(2, "0")}`;
+
+      const isFullMonth = (!fromDate || fromDate <= mStart) && (!toDate || toDate >= mEnd);
+      mObj.isFullMonth = isFullMonth;
+      mObj.isPartial = !isFullMonth;
+
+      if (hasInvoiceFeeMap[mKey]) {
+        mObj.hasInvoice = true;
+        mObj.invoiceFee = feeInvoicesMap[mKey];
+        if (isFullMonth) {
+          mObj.fee = mObj.invoiceFee;
+          mObj.afterFee = Math.max(0, mObj.gross - mObj.mcn - mObj.invoiceFee);
+          mObj.billTotal = mObj.afterFee;
+        } else {
+          // Khoảng ngày lẻ: Không prorate phí hóa đơn tháng
+          mObj.fee = null;
+          mObj.afterFee = null;
+          mObj.billTotal = null;
+        }
+      } else {
+        // Chưa có hóa đơn cho tháng này
+        mObj.hasInvoice = false;
+        mObj.invoiceFee = null;
+        mObj.fee = null;
+        mObj.afterFee = null;
+        mObj.billTotal = null;
       }
     }
 
@@ -1470,11 +1861,17 @@
       days: {},
       gross: 0,
       mcn: 0,
-      billTotal: 0,
+      billTotal: null,
       wht10: 0,
       vat: 0,
       pit: 0,
-      fee: 0,
+      fee: null,
+      payoutFee: 0,
+      invoiceFee: null,
+      hasInvoice: false,
+      afterFee: null,
+      isFullMonth: true,
+      isPartial: false,
       netPaid: 0,
       hasPayout: false,
       hasBilling: false,
@@ -1504,10 +1901,10 @@
   }
 
   function getFilteredMonthKeys(allMonths) {
-    const fromVal = fromMonthSelect ? fromMonthSelect.value : "";
-    const toVal = toMonthSelect ? toMonthSelect.value : "";
-    const start = fromVal || (allMonths && allMonths.length > 0 ? allMonths[0] : "");
-    const end = toVal || (allMonths && allMonths.length > 0 ? allMonths[allMonths.length - 1] : "");
+    const fromVal = fromDateInput ? fromDateInput.value : "";
+    const toVal = toDateInput ? toDateInput.value : "";
+    const start = fromVal ? fromVal.slice(0, 7) : (allMonths && allMonths.length > 0 ? allMonths[0] : "");
+    const end = toVal ? toVal.slice(0, 7) : (allMonths && allMonths.length > 0 ? allMonths[allMonths.length - 1] : "");
     if (!start || !end || start > end) return [];
     return enumerateCalendarMonths(start, end);
   }
@@ -1546,38 +1943,17 @@
       let wht10 = 0;
       let vat5 = 0;
       let tncnKd5 = 0;
-      let feeDv = 0;
-      let billReal = 0;
-      let netTk = 0;
 
       if (data && data.hasPayout) {
         // Nguồn dữ liệu từ Payout Record: Lấy chuẩn xác theo từng kỳ chi trả thực tế
-        feeDv = data.fee;
-        billReal = data.billTotal;
         wht10 = data.wht10;
         vat5 = data.vat;
         tncnKd5 = data.pit;
-        netTk = data.netPaid > 0 ? data.netPaid : (billReal - wht10 - vat5 - tncnKd5);
       } else if (isOctober2026Onwards) {
-        // Giai đoạn từ 10/2026: Tách 5% VAT và 5% PIT, 10% vãng lai = 0
-        feeDv = (data && data.fee > 0) ? data.fee : 0;
-        billReal = afterMcn - feeDv;
         wht10 = 0;
         vat5 = (data && data.vat > 0) ? data.vat : Math.round(afterMcn * 0.05);
         tncnKd5 = (data && data.pit > 0) ? data.pit : Math.round(afterMcn * 0.05);
-        netTk = billReal - vat5 - tncnKd5;
       } else {
-        // Giai đoạn trước 10/2026:
-        // Shopee trừ phí dịch vụ nền tảng 0.98% trực tiếp vào billTotal
-        if (data && data.fee > 0) {
-          feeDv = data.fee;
-        } else if (data && data.billTotal > 0 && afterMcn > data.billTotal) {
-          feeDv = Math.round(afterMcn - data.billTotal);
-        } else {
-          feeDv = 0;
-        }
-        billReal = afterMcn - feeDv;
-
         if (taxMode === "hkd") {
           vat5 = (data && data.vat > 0) ? data.vat : Math.round(afterMcn * 0.05);
           tncnKd5 = (data && data.pit > 0) ? data.pit : Math.round(afterMcn * 0.05);
@@ -1587,21 +1963,41 @@
           vat5 = 0;
           tncnKd5 = 0;
         } else {
-          // "actual": Lấy chính xác dữ liệu thực tế từ API Shopee trả về
-          // Chỉ hiển thị thuế TNCN khi trên bill thực tế có trừ (data.wht10 > 0)
-          // Nếu thu nhập dưới ngưỡng khấu trừ (data.wht10 === 0) thì thuế TNCN bằng 0 đ!
           wht10 = (data && data.wht10 > 0) ? data.wht10 : 0;
           vat5 = (data && data.vat > 0) ? data.vat : 0;
           tncnKd5 = 0;
         }
-        netTk = billReal - wht10 - vat5 - tncnKd5;
       }
+
+      // 1. Phí DV (HĐ): Authoritative invoice fee
+      let feeDvHtml = "-";
+      if (data && data.isPartial) {
+        if (data.hasInvoice && data.invoiceFee !== null && data.invoiceFee !== undefined) {
+          feeDvHtml = `<span title="Hóa đơn phí dịch vụ tính theo chu kỳ ngày 02 đến ngày 01 tháng sau: ${formatVnd(data.invoiceFee)} cả kỳ; không áp dụng chia lẻ theo ngày">- (${formatVnd(data.invoiceFee)})</span>`;
+        } else {
+          feeDvHtml = '<span title="Hóa đơn phí dịch vụ tính theo chu kỳ cả tháng; không áp dụng cho khoảng ngày lẻ">-</span>';
+        }
+      } else if (data && data.hasInvoice) {
+        feeDvHtml = formatVnd(data.invoiceFee);
+        totalFee += data.invoiceFee;
+      } else {
+        feeDvHtml = '<span class="badge-pending" title="Chưa có hóa đơn phí dịch vụ điện tử từ Shopee cho tháng này">Chưa có HĐ</span>';
+      }
+
+      // 2. Sau phí HĐ: Gross - MCN - Phí HĐ (chỉ khi có HĐ hợp lệ cả tháng)
+      let billRealHtml = "-";
+      if (data && !data.isPartial && data.hasInvoice && data.afterFee !== null && data.afterFee !== undefined) {
+        billRealHtml = formatVnd(data.afterFee);
+        totalBill += data.afterFee;
+      }
+
+      // 3. Thực nhận (Payout): observed NET từ Payout độc lập
+      const netTk = data ? (data.netPaid || 0) : 0;
+      const netTkHtml = formatVnd(netTk);
 
       totalGross += gross;
       totalMcn += mcn;
       totalAfterMcn += afterMcn;
-      totalFee += feeDv;
-      totalBill += billReal;
       totalWht10 += wht10;
       totalVat5 += vat5;
       totalTncnKd5 += tncnKd5;
@@ -1613,30 +2009,35 @@
         ? '<span class="badge-source badge-payout" style="display:inline-block; margin-left:4px; padding:1px 5px; background:#e8f4fd; color:#0984e3; border-radius:3px; font-size:11px; font-weight:600;">Payout</span>'
         : (hasBilling ? '<span class="badge-source badge-billing" style="display:inline-block; margin-left:4px; padding:1px 5px; background:#fff3cd; color:#d35400; border-radius:3px; font-size:11px; font-weight:600;">Billing (Fallback)</span>' : '');
 
+      const mLabel = formatMonthLabel(mKey);
       tbodyHtml += `
         <tr>
-          <td>${mKey} ${sourceBadge}</td>
+          <td data-month="${mKey}">${mLabel} ${sourceBadge}</td>
           <td>${formatVnd(gross)}</td>
           <td>${formatVnd(mcn)}</td>
           <td>${formatVnd(afterMcn)}</td>
-          <td>${formatVnd(feeDv)}</td>
-          <td>${formatVnd(billReal)}</td>
+          <td>${feeDvHtml}</td>
+          <td>${billRealHtml}</td>
           <td>${formatVnd(wht10)}</td>
           <td>${formatVnd(vat5)}</td>
           <td>${formatVnd(tncnKd5)}</td>
-          <td style="font-weight:700; color:#2d3436;">${formatVnd(netTk)}</td>
+          <td style="font-weight:700; color:#2d3436;">${netTkHtml}</td>
         </tr>
       `;
 
       simpleHtml += `
         <tr>
-          <td>${mKey}</td>
+          <td data-month="${mKey}">${mLabel}</td>
           <td style="text-align: left;">Doanh thu từ Shopee ${hasPayout ? '(Kỳ chi trả Payout)' : (hasBilling ? '(Hoàn thành đơn - Fallback Billing)' : '')}</td>
           <td>${formatVnd(gross)}</td>
-          <td style="font-weight:700; color:#107c41;">${formatVnd(netTk)}</td>
+          <td style="font-weight:700; color:#107c41;">${netTkHtml}</td>
         </tr>
       `;
     }
+
+    const allFullInvoices = activeMonths.length > 0 && activeMonths.every(m => monthsMap[m] && !monthsMap[m].isPartial && monthsMap[m].hasInvoice);
+    const totalFeeHtml = allFullInvoices ? formatVnd(totalFee) : '<span title="Chưa đủ hóa đơn phí DV hoặc có kỳ lẻ trong khoảng chọn">Chưa đủ HĐ</span>';
+    const totalBillHtml = allFullInvoices ? formatVnd(totalBill) : '-';
 
     monthlyTbody.innerHTML = tbodyHtml;
 
@@ -1646,8 +2047,8 @@
         <td>${formatVnd(totalGross)}</td>
         <td>${formatVnd(totalMcn)}</td>
         <td>${formatVnd(totalAfterMcn)}</td>
-        <td>${formatVnd(totalFee)}</td>
-        <td>${formatVnd(totalBill)}</td>
+        <td>${totalFeeHtml}</td>
+        <td>${totalBillHtml}</td>
         <td>${formatVnd(totalWht10)}</td>
         <td>${formatVnd(totalVat5)}</td>
         <td>${formatVnd(totalTncnKd5)}</td>
@@ -1671,11 +2072,17 @@
 
     // Dynamic titles
     if (activeMonths.length > 0) {
+      const fromV = fromDateInput ? fromDateInput.value : "";
+      const toV = toDateInput ? toDateInput.value : "";
       const startY = activeMonths[0].split("-")[0];
       const endY = activeMonths[activeMonths.length - 1].split("-")[0];
       const yearLabel = startY === endY ? startY : `${startY} - ${endY}`;
       bannerTitle.textContent = `Sổ tay thuế ${yearLabel}`;
-      monthlyTitle.textContent = `Theo tháng ${activeMonths[0]} đến ${activeMonths[activeMonths.length - 1]} (GMT+7 - theo kỳ chi trả khi có dữ liệu Payout, theo ngày đơn hoàn thành cho tháng còn lại)`;
+      if (fromV && toV) {
+        monthlyTitle.textContent = `Theo ngày hoàn thành / đối soát từ ${formatDateVn(fromV)} đến ${formatDateVn(toV)} (GMT+7)`;
+      } else {
+        monthlyTitle.textContent = `Theo tháng ${formatMonthLabel(activeMonths[0])} đến ${formatMonthLabel(activeMonths[activeMonths.length - 1])} (GMT+7)`;
+      }
     }
   }
 
@@ -1759,7 +2166,7 @@
               </thead>
               <tbody>
                 <tr class="month-header">
-                  <td colspan="3">Tháng ${monStr}/${y} (${mKey}) - Doanh thu theo ngày hoàn thành đơn</td>
+                  <td colspan="3">Tháng ${monStr}/${y} - Doanh thu theo ngày hoàn thành đơn</td>
                 </tr>
                 <tr>
                   <td colspan="3" style="text-align: center; color: var(--muted); padding: 24px;">
@@ -1777,11 +2184,17 @@
       const dailyMap = mData.days || {};
       let rowsHtml = "";
       let monthTotal = 0;
+      const fromVal = fromDateInput ? fromDateInput.value : "";
+      const toVal = toDateInput ? toDateInput.value : "";
 
       for (let d = 1; d <= daysCount; d++) {
+        const dStr = String(d).padStart(2, "0");
+        const dayKey = `${y}-${monStr}-${dStr}`;
+        if (fromVal && dayKey < fromVal) continue;
+        if (toVal && dayKey > toVal) continue;
+
         const amt = Math.round(dailyMap[d] || 0);
         monthTotal += amt;
-        const dStr = String(d).padStart(2, "0");
         const dateFormatted = `${dStr}/${monStr}/${y}`;
         rowsHtml += `
           <tr>
@@ -1804,7 +2217,7 @@
             </thead>
             <tbody>
               <tr class="month-header">
-                <td colspan="3">Tháng ${monStr}/${y} (${mKey}) - Doanh thu theo ngày hoàn thành đơn</td>
+                <td colspan="3">Tháng ${monStr}/${y} - Doanh thu theo ngày hoàn thành đơn</td>
               </tr>
               ${rowsHtml}
               <tr class="total-row">
@@ -1903,6 +2316,11 @@
   }
 
   function formatS1aPeriodText(activeMonths) {
+    const fromVal = fromDateInput ? fromDateInput.value : "";
+    const toVal = toDateInput ? toDateInput.value : "";
+    if (fromVal && toVal && isValidDateString(fromVal) && isValidDateString(toVal)) {
+      return `Từ ngày ${formatDateVn(fromVal)} đến ngày ${formatDateVn(toVal)}`;
+    }
     if (!activeMonths || activeMonths.length === 0) return "Chưa chọn kỳ kê khai";
     const firstM = activeMonths[0];
     const lastM = activeMonths[activeMonths.length - 1];
@@ -1915,7 +2333,7 @@
   }
 
   function extractS1aData(rawList, activeMonths, opt1, opt2) {
-    const grouping = (typeof opt1 === "string" && (opt1 === "monthly" || opt1 === "daily")) ? opt1 : (opt2 || "monthly");
+    const grouping = (typeof opt1 === "string" && (opt1 === "monthly" || opt1 === "daily" || opt1 === "payout")) ? opt1 : (opt2 || "monthly");
 
     if (!activeMonths || activeMonths.length === 0) {
       return {
@@ -1931,6 +2349,8 @@
       monthRecords[m] = [];
     }
 
+    const fromVal = fromDateInput ? fromDateInput.value : "";
+    const toVal = toDateInput ? toDateInput.value : "";
     const seenPayouts = new Map();
 
     for (const it of (rawList || [])) {
@@ -1968,10 +2388,16 @@
 
       const s = Math.floor(numTime);
       const dt = parseEpochToGmt7(s);
-      const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      const yStr = dt.getFullYear();
+      const mStr = String(dt.getMonth() + 1).padStart(2, "0");
+      const dStr = String(dt.getDate()).padStart(2, "0");
+      const mKey = `${yStr}-${mStr}`;
+      const dateKey = `${yStr}-${mStr}-${dStr}`;
 
       // If outside selected active months, skip
       if (!activeMonths.includes(mKey)) continue;
+      if (fromVal && dateKey < fromVal) continue;
+      if (toVal && dateKey > toVal) continue;
 
       // 2. Amount validation: real zero is valid, missing or malformed blocks
       const rawAmt = p.eligibleTotalAmount;
@@ -2010,7 +2436,6 @@
               missingMonths: []
             };
           }
-          // Same payoutId with same data: deduplicate, do not double totals
           continue;
         }
         seenPayouts.set(payoutId, { amt, s, mKey });
@@ -2019,16 +2444,30 @@
       monthRecords[mKey].push({
         epoch: s,
         dt,
+        dateKey,
         payoutId,
         amount: amt,
         timeField
       });
     }
 
-    // Check missing months in selected range
+    // Check missing months in selected range: distinguish truly missing RAW source vs no selected transaction
+    const rawPayoutMonths = new Set();
+    for (const it of (rawList || [])) {
+      if (!it || typeof it !== "object" || it.isFeeInvoice) continue;
+      if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime || it.payArrivalTime)) continue;
+      const p = it.paymentPayout || it;
+      let rawTime = p.payoutCreatedTime ?? it.payoutCreatedTime ?? p.payArrivalTime ?? it.payArrivalTime;
+      if (rawTime === undefined || rawTime === null || String(rawTime).trim() === "") continue;
+      const numTime = Number(String(rawTime).trim());
+      if (!Number.isFinite(numTime) || numTime <= 0 || numTime >= 1e11) continue;
+      const dt = parseEpochToGmt7(Math.floor(numTime));
+      rawPayoutMonths.add(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`);
+    }
+
     const missingMonths = [];
     for (const m of activeMonths) {
-      if (monthRecords[m].length === 0) {
+      if (!rawPayoutMonths.has(m)) {
         missingMonths.push(m);
       }
     }
@@ -2039,7 +2478,7 @@
         return `${m}/${y}`;
       }).join(", ");
       return {
-        error: `Không thể lập sổ S1a-HKD: Tháng ${formatted} không có dữ liệu từ nguồn kỳ chi trả Payout (payoutCreatedTime). Vui lòng thu hẹp khoảng tháng đã chọn.`,
+        error: `Không thể lập sổ S1a-HKD: Tháng ${formatted} không có dữ liệu từ nguồn kỳ chi trả Payout (payoutCreatedTime). Vui lòng thu hẹp khoảng ngày đã chọn.`,
         rows: [],
         grandTotal: 0,
         missingMonths
@@ -2049,7 +2488,7 @@
     const rows = [];
     let grandTotal = 0;
 
-    if (grouping === "daily") {
+    if (grouping === "daily" || grouping === "payout") {
       const allRecs = [];
       for (const mKey of activeMonths) {
         for (const r of monthRecords[mKey]) {
@@ -2072,19 +2511,27 @@
         rows.push({
           date: dateFormatted,
           desc: desc,
-          amount: r.amount
+          amount: r.amount,
+          payoutId: r.payoutId
         });
         grandTotal += r.amount;
       }
     } else {
       // grouping === "monthly" (default)
       for (const mKey of activeMonths) {
+        const recs = monthRecords[mKey];
+        if (!recs || recs.length === 0) {
+          // Tháng có nguồn Payout gốc nhưng không có giao dịch trong khoảng ngày chọn -> bỏ qua dòng tháng này
+          continue;
+        }
         const [yStr, mStr] = mKey.split("-");
         const y = parseInt(yStr, 10);
         const m = parseInt(mStr, 10);
         const lastDay = getDaysInMonth(y, m);
-        const dateFormatted = `${String(lastDay).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
-        const recs = monthRecords[mKey];
+        let dateFormatted = `${String(lastDay).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+        if (toVal && toVal.startsWith(mKey)) {
+          dateFormatted = formatDateVn(toVal);
+        }
         const monthSum = recs.reduce((acc, r) => acc + r.amount, 0);
         const count = recs.length;
         const desc = `Tổng doanh thu tháng ${String(m).padStart(2, "0")}/${y} (gộp ${count} dòng sổ)`;
@@ -2098,6 +2545,15 @@
       }
     }
 
+    if (rows.length === 0) {
+      return {
+        error: "Không thể lập sổ S1a-HKD: Không có giao dịch chi trả Payout nào trong khoảng ngày đã chọn.",
+        rows: [],
+        grandTotal: 0,
+        missingMonths: []
+      };
+    }
+
     return {
       error: null,
       rows,
@@ -2106,30 +2562,258 @@
     };
   }
 
+  function updatePayoutReconSelector(activeMonths) {
+    if (!selectPayoutRecon) return;
+    const fromVal = fromDateInput ? fromDateInput.value : "";
+    const toVal = toDateInput ? toDateInput.value : "";
+
+    const payouts = [];
+    const seen = new Set();
+
+    for (const it of (rawBillingList || [])) {
+      if (!it || typeof it !== "object" || it.isFeeInvoice) continue;
+      if (!(it.paymentPayout || it.payoutId || it.payoutCreatedTime || it.payArrivalTime)) continue;
+      const p = it.paymentPayout || it;
+      let rawTime = p.payoutCreatedTime ?? it.payoutCreatedTime ?? p.payArrivalTime ?? it.payArrivalTime;
+      if (!rawTime) continue;
+      const numTime = Number(String(rawTime).trim());
+      if (!Number.isFinite(numTime) || numTime <= 0 || numTime >= 1e11) continue;
+      const dt = parseEpochToGmt7(Math.floor(numTime));
+      const mKey = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+      const dStr = String(dt.getDate()).padStart(2, "0");
+      const dateKey = `${mKey}-${dStr}`;
+
+      if (activeMonths && activeMonths.length > 0 && !activeMonths.includes(mKey)) continue;
+      if (fromVal && dateKey < fromVal) continue;
+      if (toVal && dateKey > toVal) continue;
+
+      const pid = String(p.payoutId || it.payoutId || "").trim();
+      if (!pid || seen.has(pid)) continue;
+      seen.add(pid);
+
+      const gross = decScale(p.eligibleTotalAmount);
+      payouts.push({
+        payoutId: pid,
+        epoch: Math.floor(numTime),
+        dateFormatted: `${dStr}/${String(dt.getMonth() + 1).padStart(2, "0")}/${dt.getFullYear()}`,
+        gross
+      });
+    }
+
+    payouts.sort((a, b) => a.epoch - b.epoch);
+
+    const prevVal = selectPayoutRecon.value;
+    selectPayoutRecon.innerHTML = '<option value="">-- Chọn kỳ Payout đối chiếu --</option>';
+    for (const p of payouts) {
+      const opt = document.createElement("option");
+      opt.value = p.payoutId;
+      opt.textContent = `Kỳ ${p.payoutId} (${p.dateFormatted} - ${formatVnd(p.gross)} đ)`;
+      selectPayoutRecon.appendChild(opt);
+    }
+
+    if (prevVal && seen.has(prevVal)) {
+      selectPayoutRecon.value = prevVal;
+    }
+    if (btnOpenPayoutRecon) {
+      btnOpenPayoutRecon.disabled = !selectPayoutRecon.value;
+    }
+  }
+
+  function openPayoutReconDialog(payoutId, triggerElement) {
+    if (!payoutId) return;
+    if (!dialogPayoutRecon || !payoutReconBody) return;
+
+    // 1. Tìm bản ghi Payout trong rawBillingList
+    let payoutRecord = null;
+    for (const it of (rawBillingList || [])) {
+      if (!it || typeof it !== "object" || it.isFeeInvoice) continue;
+      const pid = String(it.paymentPayout?.payoutId || it.payoutId || "").trim();
+      if (pid === String(payoutId).trim()) {
+        payoutRecord = it;
+        break;
+      }
+    }
+
+    if (!payoutRecord) {
+      alert(`Không tìm thấy dữ liệu kỳ Payout "${payoutId}" trong bộ nhớ đệm.`);
+      return;
+    }
+
+    const p = payoutRecord.paymentPayout || payoutRecord;
+    const payoutGross = decScale(p.eligibleTotalAmount);
+    const payoutNet = decScale(p.totalPaymentAmount);
+
+    const createdTimeStr = p.payoutCreatedTime ? formatEpochDateTime(p.payoutCreatedTime) : "(không xác định)";
+    const arrivalTimeStr = p.payArrivalTime ? formatEpochDateTime(p.payArrivalTime) : "(không xác định)";
+
+    // 2. LINKED Billing records qua String(Billing.payout_id).trim() === String(Payout.payoutId).trim()
+    // từ TOÀN BỘ CACHE (WHOLE CACHE, không bị giới hạn bởi bộ lọc ngày Billing hiện tại)
+    const linkedBills = (rawBillingList || []).filter(it => {
+      if (!it || typeof it !== "object" || it.isFeeInvoice || it.paymentPayout) return false;
+      return String(it.payout_id || "").trim() === String(payoutId).trim();
+    });
+
+    linkedBills.sort((a, b) => (Number(a.order_completed_period_start_time || 0) - Number(b.order_completed_period_start_time || 0)));
+
+    let sumBillingGross = 0;
+    let sumBillingNet = 0;
+    let billsRowsHtml = "";
+
+    for (const b of linkedBills) {
+      const bGross = readMoneyAmount(b.eligible_total_amount_dis, b.eligible_total_amount);
+      const bNet = readMoneyAmount(b.total_payment_amount_dis, b.total_payment_amount);
+      const bDed = Math.max(0, bGross - bNet);
+      sumBillingGross += bGross;
+      sumBillingNet += bNet;
+
+      const completionDate = b.order_completed_period_start_time
+        ? formatEpochDateOnly(b.order_completed_period_start_time)
+        : "(không xác định)";
+
+      billsRowsHtml += `
+        <tr>
+          <td>${escapeHtml(completionDate)}</td>
+          <td>${escapeHtml(b.validation_id || "-")}</td>
+          <td style="text-align:right;">${formatVnd(bGross)} đ</td>
+          <td style="text-align:right;">${formatVnd(bDed)} đ</td>
+          <td style="text-align:right; font-weight:600;">${formatVnd(bNet)} đ</td>
+        </tr>
+      `;
+    }
+
+    const deductionAtBilling = Math.max(0, sumBillingGross - sumBillingNet);
+    const hasLinkedBills = linkedBills.length > 0;
+    const isGrossMatched = hasLinkedBills && (sumBillingGross === payoutGross);
+
+    let coverageBannerHtml = "";
+    let diffBreakdownHtml = "";
+
+    if (!hasLinkedBills) {
+      coverageBannerHtml = `
+        <div class="alert-warning" style="margin-bottom:14px; padding:10px 14px; background:#fff3cd; color:#856404; border:1px solid #ffeeba; border-radius:6px; font-size:13px;">
+          ⚠️ <strong>Cảnh báo độ bao phủ:</strong> Không tìm thấy bản ghi Billing (hoàn thành đơn) nào liên kết với kỳ Payout này trong bộ nhớ đệm cache. Sổ S1a luôn giữ nguyên doanh thu gộp từ Payout (${formatVnd(payoutGross)} đ).
+        </div>
+      `;
+    } else if (!isGrossMatched) {
+      coverageBannerHtml = `
+        <div class="alert-warning" style="margin-bottom:14px; padding:10px 14px; background:#fff3cd; color:#856404; border:1px solid #ffeeba; border-radius:6px; font-size:13px;">
+          ⚠️ <strong>Cảnh báo độ bao phủ:</strong> Tổng hoa hồng gộp từ các bản ghi Billing liên kết (${formatVnd(sumBillingGross)} đ) <strong>KHÔNG khớp</strong> với hoa hồng gộp của kỳ Payout (${formatVnd(payoutGross)} đ). Số liệu Billing trong cache có thể chưa đồng bộ đủ các lát cắt. Sổ S1a giữ nguyên số liệu gộp từ Payout.
+        </div>
+      `;
+    } else {
+      const payoutDiff = sumBillingNet - payoutNet;
+      coverageBannerHtml = `
+        <div style="margin-bottom:14px; padding:10px 14px; background:#e6fffa; color:#234e52; border:1px solid #b2f5ea; border-radius:6px; font-size:13px;">
+          ✅ <strong>Khớp hoàn toàn độ bao phủ:</strong> Đã liên kết đủ ${linkedBills.length} bản ghi Billing từ toàn bộ cache; tổng hoa hồng gộp khớp chính xác 100% với kỳ Payout (${formatVnd(payoutGross)} đ).
+        </div>
+      `;
+
+      diffBreakdownHtml = `
+        <div style="background:#f8f9fa; border:1px solid var(--border); border-radius:6px; padding:12px 16px; margin-top:14px; font-size:13px;">
+          <div style="font-weight:700; margin-bottom:8px; color:var(--text);">📊 Tổng hợp đối soát tài chính:</div>
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+            <div>• Tổng HH gộp Billing: <strong>${formatVnd(sumBillingGross)} đ</strong></div>
+            <div>• Giảm trừ tại Billing: <strong>${formatVnd(deductionAtBilling)} đ</strong></div>
+            <div>• Tổng thực nhận Billing: <strong>${formatVnd(sumBillingNet)} đ</strong></div>
+            <div>• Thực nhận chi trả Payout: <strong>${formatVnd(payoutNet)} đ</strong></div>
+          </div>
+          <div style="margin-top:10px; padding-top:8px; border-top:1px dashed var(--border); color:#d63031; font-weight:700;">
+            • Chênh lệch lúc chi trả: ${formatVnd(payoutDiff)} đ
+          </div>
+          <div style="margin-top:6px; font-size:12px; color:var(--muted); line-height:1.4;">
+            <em>Ghi chú:</em> Khoản chênh lệch ${formatVnd(payoutDiff)} đ phản ánh khấu trừ tạm tính/thuế khi chuyển khoản theo đối soát thực tế. Shopee API chỉ trả về số thực nhận tổng, không tách sẵn dòng chi tiết thuế GTGT/TNCN trong payload API.
+          </div>
+        </div>
+      `;
+    }
+
+    if (payoutReconTitle) payoutReconTitle.textContent = `🔍 Đối chiếu kỳ Payout: ${payoutId}`;
+
+    payoutReconBody.innerHTML = `
+      ${coverageBannerHtml}
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:16px; background:#f1f2f6; padding:12px 14px; border-radius:6px; font-size:13px;">
+        <div><strong>Mã kỳ Payout:</strong> ${escapeHtml(payoutId)}</div>
+        <div><strong>Ngày tạo (Creation):</strong> ${escapeHtml(createdTimeStr)}</div>
+        <div><strong>Ngày tiền về (Arrival):</strong> ${escapeHtml(arrivalTimeStr)}</div>
+        <div><strong>HH gộp Payout (API):</strong> <strong style="color:var(--primary);">${formatVnd(payoutGross)} đ</strong></div>
+        <div><strong>Thực nhận Payout (API):</strong> <strong style="color:#107c41;">${formatVnd(payoutNet)} đ</strong></div>
+      </div>
+
+      <div style="font-weight:700; font-size:13px; margin-bottom:6px;">📋 Danh sách bản ghi Billing liên kết (${linkedBills.length} bản ghi từ toàn bộ Cache):</div>
+      <div style="max-height:240px; overflow-y:auto; border:1px solid var(--border); border-radius:6px;">
+        <table class="report-table" style="width:100%; margin:0; font-size:12px;">
+          <thead>
+            <tr>
+              <th style="width:110px;">Ngày hoàn thành</th>
+              <th>Mã Billing (Validation ID)</th>
+              <th style="text-align:right; width:120px;">HH gộp</th>
+              <th style="text-align:right; width:120px;">Giảm trừ Billing</th>
+              <th style="text-align:right; width:120px;">Thực nhận Billing</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${hasLinkedBills ? billsRowsHtml : '<tr><td colspan="5" style="text-align:center; color:var(--muted); padding:16px;">Không có bản ghi Billing liên kết nào.</td></tr>'}
+          </tbody>
+          ${hasLinkedBills ? `
+          <tfoot>
+            <tr style="font-weight:700; background:#f8f9fa;">
+              <td colspan="2">Tổng cộng (${linkedBills.length} bản ghi)</td>
+              <td style="text-align:right;">${formatVnd(sumBillingGross)} đ</td>
+              <td style="text-align:right;">${formatVnd(deductionAtBilling)} đ</td>
+              <td style="text-align:right; color:#107c41;">${formatVnd(sumBillingNet)} đ</td>
+            </tr>
+          </tfoot>` : ''}
+        </table>
+      </div>
+
+      ${diffBreakdownHtml}
+    `;
+
+    const handleClose = () => {
+      if (typeof dialogPayoutRecon.close === "function") {
+        dialogPayoutRecon.close();
+      } else {
+        dialogPayoutRecon.removeAttribute("open");
+      }
+      if (triggerElement && typeof triggerElement.focus === "function") {
+        triggerElement.focus();
+      }
+    };
+
+    if (btnClosePayoutRecon) btnClosePayoutRecon.onclick = handleClose;
+    if (btnClosePayoutReconFooter) btnClosePayoutReconFooter.onclick = handleClose;
+
+    dialogPayoutRecon.onclose = () => {
+      if (triggerElement && typeof triggerElement.focus === "function") {
+        triggerElement.focus();
+      }
+    };
+
+    if (typeof dialogPayoutRecon.showModal === "function") {
+      dialogPayoutRecon.showModal();
+      if (btnClosePayoutRecon && typeof btnClosePayoutRecon.focus === "function") {
+        btnClosePayoutRecon.focus();
+      }
+    } else {
+      dialogPayoutRecon.setAttribute("open", "");
+    }
+  }
+
   function renderS1aTable() {
     if (!s1aTbody) return;
-    const activeMonths = getFilteredMonthKeys(availableMonths);
-    const grouping = s1aSelectGrouping ? s1aSelectGrouping.value : "monthly";
-
-    if (s1aDispPeriod) {
-      s1aDispPeriod.textContent = formatS1aPeriodText(activeMonths);
-    }
-
-    if (s1aDispSigDate) {
-      const now = new Date(Date.now() + 7 * 3600000);
-      const d = String(now.getUTCDate()).padStart(2, "0");
-      const m = String(now.getUTCMonth() + 1).padStart(2, "0");
-      const y = now.getUTCFullYear();
-      s1aDispSigDate.textContent = `Ngày ${d} tháng ${m} năm ${y}`;
-    }
-
     updateS1aProfileDisplay();
+    const activeMonths = getFilteredMonthKeys(availableMonths);
+    updatePayoutReconSelector(activeMonths);
 
-    const data = extractS1aData(rawBillingList, activeMonths, grouping);
+    const model = getS1aCurrentModel();
 
-    if (data.error) {
+    if (!model || model.error) {
+      const errText = model?.error || "Lỗi tạo mô hình sổ S1a-HKD";
+      if (s1aDispPeriod) {
+        s1aDispPeriod.textContent = formatS1aPeriodText(activeMonths);
+      }
       if (s1aWarningBanner && s1aWarningText) {
-        s1aWarningText.textContent = data.error;
+        s1aWarningText.textContent = errText;
         s1aWarningBanner.style.display = "flex";
       }
       if (s1aSheetWrapper) s1aSheetWrapper.style.display = "none";
@@ -2137,30 +2821,36 @@
       if (typeof document !== "undefined" && document.body?.classList) {
         document.body.classList.add("s1a-has-error");
       }
-      s1aTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #c0392b; padding: 24px;">${escapeHtml(data.error)}</td></tr>`;
+      s1aTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: #c0392b; padding: 24px;">${escapeHtml(errText)}</td></tr>`;
       if (s1aDispTotal) s1aDispTotal.textContent = "-";
       if (s1aPrintBtn) s1aPrintBtn.disabled = true;
+      if (s1aExportExcelBtn) s1aExportExcelBtn.disabled = true;
+      if (s1aExportDocxBtn) s1aExportDocxBtn.disabled = true;
       return;
     }
 
-    if (s1aWarningBanner) {
-      s1aWarningBanner.style.display = "none";
-    }
+    if (s1aDispPeriod) s1aDispPeriod.textContent = model.periodText;
+    if (s1aDispSigDate) s1aDispSigDate.textContent = model.signDateFormatted;
+
+    if (s1aWarningBanner) s1aWarningBanner.style.display = "none";
     if (s1aSheetWrapper) s1aSheetWrapper.style.display = "";
     if (s1aSheet) s1aSheet.style.display = "block";
     if (typeof document !== "undefined" && document.body?.classList) {
       document.body.classList.remove("s1a-has-error");
     }
-    if (s1aPrintBtn) {
-      s1aPrintBtn.disabled = false;
-    }
+    if (s1aPrintBtn) s1aPrintBtn.disabled = false;
+    if (s1aExportExcelBtn) s1aExportExcelBtn.disabled = false;
+    if (s1aExportDocxBtn) s1aExportDocxBtn.disabled = false;
 
     let rowsHtml = "";
-    for (const r of data.rows) {
+    for (const r of model.rows) {
+      const reconBtnHtml = r.payoutId
+        ? ` <button type="button" class="btn-s1a-recon-inline no-print" data-payout-id="${escapeHtml(r.payoutId)}" title="Xem đối chiếu kỳ ${escapeHtml(r.payoutId)}" aria-label="Xem đối chiếu kỳ ${escapeHtml(r.payoutId)}" style="margin-left:6px; padding:2px 8px; font-size:11px; cursor:pointer; background:#e8f4fd; color:#0984e3; border:1px solid #74b9ff; border-radius:4px; font-weight:600;">🔍 Đối chiếu</button>`
+        : "";
       rowsHtml += `
         <tr>
           <td class="col-s1a-date">${escapeHtml(r.date)}</td>
-          <td class="col-s1a-desc">${escapeHtml(r.desc)}</td>
+          <td class="col-s1a-desc">${escapeHtml(r.desc)}${reconBtnHtml}</td>
           <td class="col-s1a-amt">${formatVnd(r.amount)}</td>
         </tr>
       `;
@@ -2168,8 +2858,8 @@
 
     // Pad at least 5 rows for authentic paper form layout
     const minRows = 5;
-    if (data.rows.length < minRows) {
-      for (let i = data.rows.length; i < minRows; i++) {
+    if (model.rows.length < minRows) {
+      for (let i = model.rows.length; i < minRows; i++) {
         rowsHtml += `
           <tr>
             <td class="col-s1a-date">&nbsp;</td>
@@ -2182,8 +2872,46 @@
 
     s1aTbody.innerHTML = rowsHtml;
     if (s1aDispTotal) {
-      s1aDispTotal.textContent = formatVnd(data.grandTotal);
+      s1aDispTotal.textContent = formatVnd(model.totalAmount);
     }
+  }
+
+  function getS1aCurrentModel() {
+    const activeMonths = getFilteredMonthKeys(availableMonths);
+    const grouping = s1aSelectGrouping ? s1aSelectGrouping.value : "monthly";
+    const data = extractS1aData(rawBillingList, activeMonths, grouping);
+    if (data.error) return { error: data.error };
+
+    const now = new Date(Date.now() + 7 * 3600000);
+    const signDay = String(now.getUTCDate()).padStart(2, "0");
+    const signMonth = String(now.getUTCMonth() + 1).padStart(2, "0");
+    const signYear = String(now.getUTCFullYear());
+    const signDateFormatted = `Ngày ${signDay} tháng ${signMonth} năm ${signYear}`;
+
+    const ownerName = s1aInputName ? s1aInputName.value.trim() : "";
+    const address = s1aInputAddress ? s1aInputAddress.value.trim() : "";
+    const taxCode = s1aInputTaxCode ? s1aInputTaxCode.value.trim() : "";
+    const businessLocation = s1aInputLocation ? (s1aInputLocation.value.trim() || "Kinh doanh trên nền tảng số (Shopee Affiliate)") : "Kinh doanh trên nền tảng số (Shopee Affiliate)";
+    const signerName = ownerName;
+
+    return {
+      error: null,
+      ownerName,
+      address,
+      taxCode,
+      businessLocation,
+      periodText: formatS1aPeriodText(activeMonths),
+      unit: "đồng",
+      grouping,
+      rows: data.rows,
+      totalAmount: data.grandTotal,
+      grandTotal: data.grandTotal,
+      signerName,
+      signDay,
+      signMonth,
+      signYear,
+      signDateFormatted
+    };
   }
 
   // S1a Profile Event Listeners
@@ -2206,6 +2934,46 @@
     });
   }
 
+  if (s1aExportExcelBtn) {
+    s1aExportExcelBtn.addEventListener("click", () => {
+      if (fromDateInput?.dataset.hasParseError || toDateInput?.dataset.hasParseError ||
+          fromDateText?.classList.contains("is-invalid") || toDateText?.classList.contains("is-invalid")) {
+        alert("Không thể xuất file: Ngày nhập vào không hợp lệ. Vui lòng kiểm tra lại định dạng DD/MM/YYYY!");
+        return;
+      }
+      if (s1aExportExcelBtn.disabled || (typeof document !== "undefined" && document.body?.classList?.contains("s1a-has-error"))) {
+        return;
+      }
+      const model = getS1aCurrentModel();
+      if (!model) return;
+      if (typeof S1aExport !== "undefined" && typeof S1aExport.downloadS1aXlsx === "function") {
+        const fromV = fromDateInput ? fromDateInput.value : "start";
+        const toV = toDateInput ? toDateInput.value : "end";
+        S1aExport.downloadS1aXlsx(model, `So_Doanh_Thu_S1a_HKD_${fromV}_den_${toV}.xlsx`);
+      }
+    });
+  }
+
+  if (s1aExportDocxBtn) {
+    s1aExportDocxBtn.addEventListener("click", () => {
+      if (fromDateInput?.dataset.hasParseError || toDateInput?.dataset.hasParseError ||
+          fromDateText?.classList.contains("is-invalid") || toDateText?.classList.contains("is-invalid")) {
+        alert("Không thể xuất file: Ngày nhập vào không hợp lệ. Vui lòng kiểm tra lại định dạng DD/MM/YYYY!");
+        return;
+      }
+      if (s1aExportDocxBtn.disabled || (typeof document !== "undefined" && document.body?.classList?.contains("s1a-has-error"))) {
+        return;
+      }
+      const model = getS1aCurrentModel();
+      if (!model) return;
+      if (typeof S1aExport !== "undefined" && typeof S1aExport.downloadS1aDocx === "function") {
+        const fromV = fromDateInput ? fromDateInput.value : "start";
+        const toV = toDateInput ? toDateInput.value : "end";
+        S1aExport.downloadS1aDocx(model, `So_Doanh_Thu_S1a_HKD_${fromV}_den_${toV}.docx`);
+      }
+    });
+  }
+
   if (s1aPrintBtn) {
     s1aPrintBtn.addEventListener("click", () => {
       if (s1aPrintBtn.disabled || (typeof document !== "undefined" && document.body?.classList?.contains("s1a-has-error"))) {
@@ -2222,6 +2990,8 @@
   }
 
   function buildExportRows(monthsMap, activeMonths) {
+    const fromVal = (typeof fromDateInput !== "undefined" && fromDateInput) ? fromDateInput.value : "";
+    const toVal = (typeof toDateInput !== "undefined" && toDateInput) ? toDateInput.value : "";
     // Array of rows: [ [col1, col2, col3], ... ]
     const rows = [];
     rows.push(["Ngày tháng", "Diễn giải", "Số tiền"]);
@@ -2245,16 +3015,26 @@
       const daysCount = getDaysInMonth(y, m);
       const dailyMap = mData.days || {};
       let monthTotal = 0;
+      let monthHasDays = false;
 
       for (let d = 1; d <= daysCount; d++) {
+        const dStr = String(d).padStart(2, "0");
+        const dayKey = `${yStr}-${monStr}-${dStr}`;
+        if (fromVal && dayKey < fromVal) continue;
+        if (toVal && dayKey > toVal) continue;
+
         const amt = Math.round(dailyMap[d] || 0);
         monthTotal += amt;
-        const dStr = String(d).padStart(2, "0");
         const dateFormatted = `${dStr}/${monStr}/${y}`;
         rows.push([dateFormatted, "Doanh thu từ Shopee", amt]);
+        monthHasDays = true;
       }
 
-      rows.push(["", "Tổng Doanh Thu", monthTotal]);
+      if (monthHasDays) {
+        rows.push(["", "Tổng Doanh Thu", monthTotal]);
+      } else {
+        rows.push(["-", "Không có ngày nào trong khoảng lọc", "-"]);
+      }
       rows.push(["", "", ""]); // empty spacer
     }
 
@@ -2262,7 +3042,18 @@
   }
 
   function downloadCsv() {
-    const monthsMap = processData();
+    if (fromDateInput?.dataset.hasParseError || toDateInput?.dataset.hasParseError ||
+        fromDateText?.classList.contains("is-invalid") || toDateText?.classList.contains("is-invalid")) {
+      alert("Không thể xuất file: Ngày nhập vào không hợp lệ. Vui lòng kiểm tra lại định dạng DD/MM/YYYY!");
+      return;
+    }
+    const fromVal = (typeof fromDateInput !== "undefined" && fromDateInput) ? fromDateInput.value : "";
+    const toVal = (typeof toDateInput !== "undefined" && toDateInput) ? toDateInput.value : "";
+    if (fromVal && toVal && fromVal > toVal) {
+      alert("Khoảng ngày lọc không hợp lệ: 'Từ ngày' phải nhỏ hơn hoặc bằng 'Đến ngày'!");
+      return;
+    }
+    const monthsMap = processData(fromVal, toVal);
     const activeMonths = getFilteredMonthKeys(availableMonths);
     if (activeMonths.length === 0) {
       alert("Không có tháng nào được chọn để xuất CSV!");
@@ -2295,13 +3086,26 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `DoanhThu_Shopee_${activeMonths[0]}_den_${activeMonths[activeMonths.length - 1]}.csv`;
+    const fileFrom = fromVal || activeMonths[0];
+    const fileTo = toVal || activeMonths[activeMonths.length - 1];
+    link.download = `DoanhThu_Shopee_${fileFrom}_den_${fileTo}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
   function downloadExcel() {
-    const monthsMap = processData();
+    if (fromDateInput?.dataset.hasParseError || toDateInput?.dataset.hasParseError ||
+        fromDateText?.classList.contains("is-invalid") || toDateText?.classList.contains("is-invalid")) {
+      alert("Không thể xuất file: Ngày nhập vào không hợp lệ. Vui lòng kiểm tra lại định dạng DD/MM/YYYY!");
+      return;
+    }
+    const fromVal = (typeof fromDateInput !== "undefined" && fromDateInput) ? fromDateInput.value : "";
+    const toVal = (typeof toDateInput !== "undefined" && toDateInput) ? toDateInput.value : "";
+    if (fromVal && toVal && fromVal > toVal) {
+      alert("Khoảng ngày lọc không hợp lệ: 'Từ ngày' phải nhỏ hơn hoặc bằng 'Đến ngày'!");
+      return;
+    }
+    const monthsMap = processData(fromVal, toVal);
     const activeMonths = getFilteredMonthKeys(availableMonths);
     if (activeMonths.length === 0) {
       alert("Không có tháng nào được chọn để xuất Excel!");
@@ -2431,53 +3235,103 @@
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `DoanhThu_Shopee_${activeMonths[0]}_den_${activeMonths[activeMonths.length - 1]}.xls`;
+    const fileFrom = fromVal || activeMonths[0];
+    const fileTo = toVal || activeMonths[activeMonths.length - 1];
+    link.download = `DoanhThu_Shopee_${fileFrom}_den_${fileTo}.xls`;
     link.click();
     URL.revokeObjectURL(url);
   }
 
-  exportCsvBtn.addEventListener("click", downloadCsv);
-  exportExcelBtn.addEventListener("click", downloadExcel);
+  if (exportCsvBtn) exportCsvBtn.addEventListener("click", downloadCsv);
+  if (exportExcelBtn) exportExcelBtn.addEventListener("click", downloadExcel);
 
-  // Month range selector handling
-  function populateMonthSelects(months) {
-    const curFrom = fromMonthSelect.value;
-    const curTo = toMonthSelect.value;
+  // Date range selector handling
+  function populateDateInputs(months) {
+    const gmt7Now = new Date(Date.now() + 7 * 3600000);
+    const y = gmt7Now.getUTCFullYear();
+    const m = gmt7Now.getUTCMonth() + 1;
+    const mm = String(m).padStart(2, "0");
+    const lastDay = getDaysInMonth(y, m);
+    const defaultFrom = `${y}-${mm}-01`;
+    const defaultTo = `${y}-${mm}-${String(lastDay).padStart(2, "0")}`;
 
-    fromMonthSelect.innerHTML = "";
-    toMonthSelect.innerHTML = "";
+    const curFrom = fromDateInput ? fromDateInput.value : "";
+    const curTo = toDateInput ? toDateInput.value : "";
 
-    for (const m of months) {
-      const optFrom = document.createElement("option");
-      optFrom.value = m;
-      optFrom.textContent = m;
-      fromMonthSelect.appendChild(optFrom);
-
-      const optTo = document.createElement("option");
-      optTo.value = m;
-      optTo.textContent = m;
-      toMonthSelect.appendChild(optTo);
+    if (fromDateInput) {
+      fromDateInput.value = (curFrom && isValidDateString(curFrom)) ? curFrom : defaultFrom;
+      if (fromDateText) syncIsoToText(fromDateInput, fromDateText, fromDateError);
     }
-
-    if (months.length > 0) {
-      // Default to first month of current year or start
-      const firstOfYear = months.find(m => m.startsWith("2026-01")) || months[0];
-      fromMonthSelect.value = curFrom && months.includes(curFrom) ? curFrom : firstOfYear;
-      toMonthSelect.value = curTo && months.includes(curTo) ? curTo : months[months.length - 1];
+    if (toDateInput) {
+      toDateInput.value = (curTo && isValidDateString(curTo)) ? curTo : defaultTo;
+      if (toDateText) syncIsoToText(toDateInput, toDateText, toDateError);
     }
   }
 
   function handleFilterChange() {
-    const monthsMap = processData();
+    const fromVal = (typeof fromDateInput !== "undefined" && fromDateInput) ? fromDateInput.value : "";
+    const toVal = (typeof toDateInput !== "undefined" && toDateInput) ? toDateInput.value : "";
+    if (fromDateInput?.dataset.hasParseError || toDateInput?.dataset.hasParseError ||
+        fromDateText?.classList.contains("is-invalid") || toDateText?.classList.contains("is-invalid")) {
+      showStatus("Lỗi bộ lọc: Ngày nhập vào không hợp lệ (DD/MM/YYYY).", "error");
+      renderMonthlyTable({}, []);
+      renderDailyTables({}, []);
+      renderS1aTable();
+      return;
+    }
+    if (fromVal && toVal && fromVal > toVal) {
+      showStatus("Lỗi bộ lọc: 'Từ ngày' phải nhỏ hơn hoặc bằng 'Đến ngày'.", "error");
+      if (fromDateError) {
+        fromDateError.classList.add("active");
+        fromDateError.textContent = "Từ ngày phải nhỏ hơn hoặc bằng Đến ngày";
+      }
+      renderMonthlyTable({}, []);
+      renderDailyTables({}, []);
+      renderS1aTable();
+      return;
+    }
+    if (fromDateError && !fromDateInput?.dataset.hasParseError) {
+      fromDateError.classList.remove("active");
+      fromDateError.textContent = "";
+    }
+    const monthsMap = processData(fromVal, toVal);
     const activeMonths = getFilteredMonthKeys(availableMonths);
     renderMonthlyTable(monthsMap, activeMonths);
     renderDailyTables(monthsMap, activeMonths);
     renderS1aTable();
   }
 
-  fromMonthSelect.addEventListener("change", handleFilterChange);
-  toMonthSelect.addEventListener("change", handleFilterChange);
-  taxModeSelect.addEventListener("change", handleFilterChange);
+  setupDateInputPair(fromDateInput, fromDateText, fromDateError, btnFromCalendar);
+  setupDateInputPair(toDateInput, toDateText, toDateError, btnToCalendar);
+
+  if (fromDateInput) fromDateInput.addEventListener("change", handleFilterChange);
+  if (toDateInput) toDateInput.addEventListener("change", handleFilterChange);
+  if (taxModeSelect) taxModeSelect.addEventListener("change", handleFilterChange);
+
+  if (selectPayoutRecon) {
+    selectPayoutRecon.addEventListener("change", () => {
+      if (btnOpenPayoutRecon) {
+        btnOpenPayoutRecon.disabled = !selectPayoutRecon.value;
+      }
+    });
+  }
+
+  if (btnOpenPayoutRecon) {
+    btnOpenPayoutRecon.addEventListener("click", () => {
+      if (selectPayoutRecon && selectPayoutRecon.value) {
+        openPayoutReconDialog(selectPayoutRecon.value, btnOpenPayoutRecon);
+      }
+    });
+  }
+
+  if (s1aTbody) {
+    s1aTbody.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-s1a-recon-inline");
+      if (btn && btn.dataset.payoutId) {
+        openPayoutReconDialog(btn.dataset.payoutId, btn);
+      }
+    });
+  }
 
   // Initial render
   function initDataAndRender() {
@@ -2494,10 +3348,13 @@
       availableMonths = sortedMonths;
     }
 
-    populateMonthSelects(availableMonths);
+    populateDateInputs(availableMonths);
+    const fromVal = (typeof fromDateInput !== "undefined" && fromDateInput) ? fromDateInput.value : "";
+    const toVal = (typeof toDateInput !== "undefined" && toDateInput) ? toDateInput.value : "";
+    const filteredMap = (fromVal || toVal) ? processData(fromVal, toVal) : monthsMap;
     const activeMonths = getFilteredMonthKeys(availableMonths);
-    renderMonthlyTable(monthsMap, activeMonths);
-    renderDailyTables(monthsMap, activeMonths);
+    renderMonthlyTable(filteredMap, activeMonths);
+    renderDailyTables(filteredMap, activeMonths);
     renderS1aTable();
   }
 
@@ -2546,5 +3403,11 @@
     window.processData = processData;
     window.extractS1aData = extractS1aData;
     window.renderS1aTable = renderS1aTable;
+    window.getS1aCurrentModel = getS1aCurrentModel;
+    window.openPayoutReconDialog = openPayoutReconDialog;
+    window.parseDmyToIso = parseDmyToIso;
+    window.formatIsoToDmy = formatIsoToDmy;
+    window.formatMonthLabel = formatMonthLabel;
+    window.fetchLiveFromTab = fetchLiveFromTab;
   }
 })();

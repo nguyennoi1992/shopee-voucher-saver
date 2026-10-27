@@ -675,6 +675,97 @@
     }
 
     /* Print styles for A4 export */
+    .date-picker-group {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .date-field-container {
+      display: flex;
+      align-items: center;
+      position: relative;
+    }
+    .date-text-display {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px 0 0 6px;
+      font-size: 13px;
+      width: 105px;
+      background: #ffffff;
+      color: var(--text);
+    }
+    .date-text-display.is-invalid {
+      border-color: #e74c3c;
+      background-color: #fdf2f2;
+    }
+    .btn-calendar-trigger {
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-left: none;
+      border-radius: 0 6px 6px 0;
+      background: var(--bg-soft, #f8f9fa);
+      cursor: pointer;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-calendar-trigger:hover {
+      background: #e2e8f0;
+    }
+    .date-input-canonical {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      padding: 0;
+      margin: 0;
+      border: 0;
+      pointer-events: none;
+    }
+    .date-feedback-error {
+      font-size: 11px;
+      color: #e74c3c;
+      margin-top: 2px;
+      display: none;
+    }
+    .date-feedback-error.active {
+      display: block;
+    }
+    dialog.payout-recon-dialog {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 800px;
+      width: 90vw;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+      background: #ffffff;
+      color: var(--text);
+    }
+    dialog.payout-recon-dialog::backdrop {
+      background: rgba(0, 0, 0, 0.5);
+    }
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .dialog-close-btn {
+      background: none;
+      border: none;
+      font-size: 22px;
+      cursor: pointer;
+      color: var(--muted);
+      line-height: 1;
+      padding: 0 4px;
+    }
+    .dialog-close-btn:hover {
+      color: var(--text);
+    }
+
     @media print {
       @page {
         size: A4 portrait;
@@ -697,6 +788,10 @@
       .s1a-controls,
       .tab-content:not(.active),
       .no-print {
+        display: none !important;
+      }
+
+      dialog.payout-recon-dialog {
         display: none !important;
       }
 
@@ -779,13 +874,23 @@
     <!-- Controls Bar -->
     <section class="controls-card">
       <div class="filter-group">
-        <div class="filter-item">
-          <label for="select-from-month">Từ tháng:</label>
-          <select id="select-from-month"></select>
+        <div class="filter-item date-picker-group">
+          <label for="input-from-date-text">Từ ngày:</label>
+          <div class="date-field-container">
+            <input type="text" id="input-from-date-text" class="date-text-display" placeholder="dd/mm/yyyy" maxlength="10" autocomplete="off" aria-label="Từ ngày (định dạng ngày/tháng/năm)">
+            <button type="button" id="btn-from-calendar" class="btn-calendar-trigger no-print" aria-label="Mở lịch chọn Từ ngày" title="Chọn ngày từ lịch">📅</button>
+            <input type="date" id="input-from-date" class="date-input-canonical" aria-hidden="true" tabindex="-1">
+          </div>
+          <span id="input-from-date-error" class="date-feedback-error" aria-live="polite"></span>
         </div>
-        <div class="filter-item">
-          <label for="select-to-month">Đến tháng:</label>
-          <select id="select-to-month"></select>
+        <div class="filter-item date-picker-group">
+          <label for="input-to-date-text">Đến ngày:</label>
+          <div class="date-field-container">
+            <input type="text" id="input-to-date-text" class="date-text-display" placeholder="dd/mm/yyyy" maxlength="10" autocomplete="off" aria-label="Đến ngày (định dạng ngày/tháng/năm)">
+            <button type="button" id="btn-to-calendar" class="btn-calendar-trigger no-print" aria-label="Mở lịch chọn Đến ngày" title="Chọn ngày từ lịch">📅</button>
+            <input type="date" id="input-to-date" class="date-input-canonical" aria-hidden="true" tabindex="-1">
+          </div>
+          <span id="input-to-date-error" class="date-feedback-error" aria-live="polite"></span>
         </div>
         <div class="filter-item">
           <label for="select-tax-mode">Chế độ tính:</label>
@@ -807,11 +912,11 @@
         <button id="btn-paste-modal" class="btn btn-outline" title="Dán dữ liệu JSON hoặc bảng copy từ Shopee">
           <span>📋</span> Dán dữ liệu
         </button>
-        <button id="btn-export-excel" class="btn btn-excel" title="Xuất file Excel (.xls) theo mẫu doanh thu">
-          <span>📊</span> Xuất Excel
+        <button id="btn-export-excel" class="btn btn-excel" title="Xuất file Excel (.xls) theo ngày hoàn thành đơn">
+          <span>📊</span> Xuất Excel (Bảng ngày)
         </button>
-        <button id="btn-export-csv" class="btn btn-success" title="Xuất file CSV UTF-8">
-          <span>📥</span> Xuất CSV
+        <button id="btn-export-csv" class="btn btn-success" title="Xuất file CSV UTF-8 theo ngày hoàn thành đơn">
+          <span>📥</span> Xuất CSV (Bảng ngày)
         </button>
       </div>
     </section>
@@ -842,12 +947,12 @@
                 <th>HH gộp</th>
                 <th>Phí MCN</th>
                 <th>Sau MCN</th>
-                <th>Phí DV 0,98%</th>
-                <th>Thực nhận theo bill</th>
-                <th>10% TNCN (vãng lai)</th>
-                <th>5% GTGT</th>
-                <th>5% TNCN (KD)</th>
-                <th>Ước thực về TK</th>
+                <th>Phí DV (HĐ)</th>
+                <th>Sau phí HĐ (suy luận)</th>
+                <th>10% TNCN (ước tính)</th>
+                <th>5% GTGT (ước tính)</th>
+                <th>5% TNCN (ước tính)</th>
+                <th>Thực nhận (Payout thực tế)</th>
               </tr>
             </thead>
             <tbody id="monthly-tbody">
@@ -923,13 +1028,22 @@
           </div>
         </div>
 
-        <div class="s1a-form-grid" style="margin-bottom: 10px;">
-          <div class="s1a-field">
+        <div class="s1a-form-grid no-print" style="margin-bottom: 10px; display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+          <div class="s1a-field" style="flex: 1; min-width: 260px;">
             <label for="s1a-select-grouping">Phương pháp ghi sổ:</label>
             <select id="s1a-select-grouping">
               <option value="monthly" selected>Ghi tổng theo tháng (Định kỳ ngày cuối tháng - Mặc định)</option>
               <option value="daily">Ghi chi tiết theo từng kỳ chi trả</option>
             </select>
+          </div>
+          <div class="s1a-field" style="flex: 1; min-width: 260px;">
+            <label for="select-payout-recon">Đối chiếu kỳ Payout (Toàn bộ Cache):</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="select-payout-recon" style="flex: 1;" aria-label="Chọn kỳ Payout đối chiếu">
+                <option value="">-- Chọn kỳ Payout đối chiếu --</option>
+              </select>
+              <button type="button" id="btn-open-payout-recon" class="btn btn-outline" style="white-space: nowrap; font-weight: 600;" disabled>🔍 Xem đối chiếu</button>
+            </div>
           </div>
         </div>
 
@@ -940,6 +1054,12 @@
           <div class="btn-group">
             <button id="btn-s1a-save-profile" class="btn btn-outline" title="Lưu thông tin định danh vào bộ nhớ trình duyệt (không gửi qua mạng)">
               <span>💾</span> Lưu thông tin
+            </button>
+            <button id="btn-s1a-export-excel" class="btn btn-outline" style="background:#107c41; color:#fff;" title="Xuất Sổ doanh thu S1a-HKD ra file Excel chuẩn (.xlsx)">
+              <span>📊</span> Xuất Excel S1a (.xlsx)
+            </button>
+            <button id="btn-s1a-export-docx" class="btn btn-outline" style="background:#2b579a; color:#fff;" title="Xuất Sổ doanh thu S1a-HKD ra file Word chuẩn (.docx)">
+              <span>📄</span> Xuất Word S1a (.docx)
             </button>
             <button id="btn-s1a-print" class="btn btn-primary" title="In trực tiếp hoặc Lưu thành file PDF chuẩn A4">
               <span>🖨️</span> In / Lưu PDF
@@ -1022,6 +1142,22 @@
     </div>
   </div>
 
+  <!-- Dialog Đối chiếu kỳ Payout (Readonly) -->
+  <dialog id="dialog-payout-recon" class="payout-recon-dialog no-print" aria-labelledby="payout-recon-title">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3 id="payout-recon-title" style="margin: 0; font-size: 16px;">🔍 Đối chiếu kỳ Payout</h3>
+        <button type="button" id="btn-close-payout-recon" class="dialog-close-btn" aria-label="Đóng hộp thoại">&times;</button>
+      </div>
+      <div id="payout-recon-body" class="dialog-body">
+        <!-- Rendered dynamically -->
+      </div>
+      <div class="dialog-footer" style="margin-top: 16px; text-align: right;">
+        <button type="button" id="btn-close-payout-recon-footer" class="btn btn-secondary">Đóng</button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Paste Data Modal -->
   <div id="paste-modal" class="modal-backdrop">
     <div class="modal">
@@ -1035,6 +1171,7 @@
     </div>
   </div>
 
+  <script src="s1a_export.js"></script>
   <script src="tax_report.js"></script>
 </body>
 </html>

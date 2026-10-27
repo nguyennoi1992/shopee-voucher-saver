@@ -84,6 +84,10 @@ class TestAffiliateReportActualJS(unittest.TestCase):
         dom.document.getElementById('show-affiliate').click();
 
         setTimeout(async () => {
+          dom.document.getElementById('popup-from-date').value = '2026-01-01';
+          dom.document.getElementById('popup-to-date').value = '2026-10-31';
+          dom.document.getElementById('popup-from-date').trigger('change');
+
           const tbody = dom.document.getElementById('aff-simple-tbody');
           const grossEl = dom.document.getElementById('affiliate-total-gross');
           const netEl = dom.document.getElementById('affiliate-net-tk');
@@ -143,6 +147,9 @@ class TestAffiliateReportActualJS(unittest.TestCase):
           vm.createContext(popupSandbox2);
           vm.runInContext(code, popupSandbox2);
           popupDom2.document.getElementById('show-affiliate').click();
+          popupDom2.document.getElementById('popup-from-date').value = '2026-05-01';
+          popupDom2.document.getElementById('popup-to-date').value = '2026-05-31';
+          popupDom2.document.getElementById('popup-from-date').trigger('change');
           await new Promise(r => setTimeout(r, 20));
 
           const popupTfoot = popupDom2.document.getElementById('aff-full-tfoot')?.innerHTML || "";
@@ -158,7 +165,7 @@ class TestAffiliateReportActualJS(unittest.TestCase):
             taxBillTotal,
             taxObservedNet,
             popupFeeMatchesTax: popupTfoot.includes(`${taxFee} đ`),
-            popupNetMatchesTax: popupNetText === `${taxBillTotal} đ`
+            popupBillMatchesTax: popupTfoot.includes(`${taxBillTotal} đ`)
           }));
         }, 50);
         """
@@ -167,9 +174,8 @@ class TestAffiliateReportActualJS(unittest.TestCase):
         self.assertIn("2026-01", out["simpleHtml"])
         # Oct payout net 186.882 must be preserved
         self.assertIn("186.882", out["fullHtml"])
-        # Oct payout fee 2.032 must be preserved, not overwritten by 10.000
-        self.assertIn("2.032", out["fullHtml"])
-        self.assertNotIn("10.000", out["fullHtml"])
+        # Oct authoritative invoice fee 10.000 must be applied
+        self.assertIn("10.000", out["fullHtml"])
         # Total gross 6.070.049 + 207.288 = 6.277.337 đ
         self.assertEqual(out["grossText"], "6.277.337 đ")
         self.assertTrue(out["harnessStorageContractOk"], "Harness storage.local.get null/undefined should return full store")
@@ -177,7 +183,7 @@ class TestAffiliateReportActualJS(unittest.TestCase):
         self.assertEqual(out["taxBillTotal"], 700, "BillTotal should correctly reflect total gross minus deduplicated fee sum")
         self.assertEqual(out["taxObservedNet"], 1000, "Observed netPaid from API should be preserved, not overwritten")
         self.assertTrue(out["popupFeeMatchesTax"], "Popup fee should match tax report fee")
-        self.assertTrue(out["popupNetMatchesTax"], "Popup net should match tax report reconciled billTotal")
+        self.assertTrue(out["popupBillMatchesTax"], "Popup full tfoot should include tax report reconciled billTotal")
 
     def test_02_popup_month_filter_dom_output(self):
         """Month filter (fromM/toM) strictly isolates DOM table rows, dailies and summary cards."""
@@ -206,10 +212,10 @@ class TestAffiliateReportActualJS(unittest.TestCase):
         dom.document.getElementById('show-affiliate').click();
 
         setTimeout(() => {
-          const fromEl = dom.document.getElementById('popup-from-month');
-          const toEl = dom.document.getElementById('popup-to-month');
-          fromEl.value = "2026-10";
-          toEl.value = "2026-10";
+          const fromEl = dom.document.getElementById('popup-from-date');
+          const toEl = dom.document.getElementById('popup-to-date');
+          fromEl.value = "2026-10-01";
+          toEl.value = "2026-10-31";
           fromEl.trigger('change');
 
           const tbody = dom.document.getElementById('aff-simple-tbody');
@@ -1010,10 +1016,10 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
 
         setTimeout(async () => {
           // Filter to October only
-          const fromEl = taxDom.document.getElementById('select-from-month');
-          const toEl = taxDom.document.getElementById('select-to-month');
-          fromEl.value = "2026-10";
-          toEl.value = "2026-10";
+          const fromEl = taxDom.document.getElementById('input-from-date');
+          const toEl = taxDom.document.getElementById('input-to-date');
+          fromEl.value = "2026-10-01";
+          toEl.value = "2026-10-31";
           fromEl.trigger('change');
 
           // 1. Export CSV
@@ -1101,6 +1107,9 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
         vm.createContext(sandboxPopupB);
         vm.runInContext(fs.readFileSync('popup.js', 'utf8'), sandboxPopupB);
         domPopupB.document.getElementById('show-affiliate').click();
+        domPopupB.document.getElementById('popup-from-date').value = '2026-05-01';
+        domPopupB.document.getElementById('popup-to-date').value = '2026-05-31';
+        domPopupB.document.getElementById('popup-from-date').trigger('change');
 
         // Case C: Mixed range (2026-05 has billing, 2026-10 missing billing)
         const mixedData = [
@@ -1133,10 +1142,10 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           const popupDailyB = domPopupB.document.getElementById('aff-daily-tbody').innerHTML;
 
           // Mixed range export blocking test
-          const fromElC = domTaxC.document.getElementById('select-from-month');
-          const toElC = domTaxC.document.getElementById('select-to-month');
-          fromElC.value = "2026-05";
-          toElC.value = "2026-10";
+          const fromElC = domTaxC.document.getElementById('input-from-date');
+          const toElC = domTaxC.document.getElementById('input-to-date');
+          fromElC.value = "2026-05-01";
+          toElC.value = "2026-10-31";
           fromElC.trigger('change');
 
           lastBlobC = null;
@@ -1152,8 +1161,8 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           const excelAlertMixed = alertMsgC;
 
           // Zero-billing single month export test (2026-05)
-          fromElC.value = "2026-05";
-          toElC.value = "2026-05";
+          fromElC.value = "2026-05-01";
+          toElC.value = "2026-05-31";
           fromElC.trigger('change');
 
           lastBlobC = null;
@@ -1644,9 +1653,9 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
 
         setTimeout(() => {
           // 1. Select range 2026-09 to 2026-10: Sep is missing payout data -> must block
-          dom.document.getElementById('select-from-month').value = '2026-09';
-          dom.document.getElementById('select-to-month').value = '2026-10';
-          dom.document.getElementById('select-from-month').trigger('change');
+          dom.document.getElementById('input-from-date').value = '2026-09-01';
+          dom.document.getElementById('input-to-date').value = '2026-10-31';
+          dom.document.getElementById('input-from-date').trigger('change');
 
           const missingSepWarnText = dom.document.getElementById('s1a-warning-text').textContent;
           const missingSepPrintDisabled = Boolean(dom.document.getElementById('btn-s1a-print').disabled);
@@ -1659,8 +1668,8 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           const gapDetected = Boolean(dataGap.error && dataGap.missingMonths.includes("2026-09"));
 
           // 3. Calendar gap validation in CSV export: selected Sep to Nov with Oct missing billing
-          dom.document.getElementById('select-from-month').value = '2026-09';
-          dom.document.getElementById('select-to-month').value = '2026-11';
+          dom.document.getElementById('input-from-date').value = '2026-09-01';
+          dom.document.getElementById('input-to-date').value = '2026-11-30';
           dom.document.getElementById('btn-export-csv').click();
           const csvGapAlert = lastAlert;
 
@@ -1757,9 +1766,9 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
 
         setTimeout(async () => {
           // Verify boundary is categorized under October 2026
-          dom.document.getElementById('select-from-month').value = '2026-10';
-          dom.document.getElementById('select-to-month').value = '2026-10';
-          dom.document.getElementById('select-from-month').trigger('change');
+          dom.document.getElementById('input-from-date').value = '2026-10-01';
+          dom.document.getElementById('input-to-date').value = '2026-10-31';
+          dom.document.getElementById('input-from-date').trigger('change');
 
           const s1aTbody = dom.document.getElementById('s1a-tbody').innerHTML;
           const s1aTotal = dom.document.getElementById('s1a-disp-total').textContent;
@@ -1903,10 +1912,10 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
 
         setTimeout(async () => {
           // Select March 2026 in tax_report
-          const fromEl = taxDom.document.getElementById('select-from-month');
-          const toEl = taxDom.document.getElementById('select-to-month');
-          fromEl.value = "2026-03";
-          toEl.value = "2026-03";
+          const fromEl = taxDom.document.getElementById('input-from-date');
+          const toEl = taxDom.document.getElementById('input-to-date');
+          fromEl.value = "2026-03-01";
+          toEl.value = "2026-03-31";
           fromEl.trigger('change');
 
           const taxMonthlyHtml = taxDom.document.getElementById('monthly-tbody').innerHTML;
@@ -1916,10 +1925,10 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           const s1aTbody = taxDom.document.getElementById('s1a-tbody').innerHTML;
 
           // Select March 2026 in popup
-          const pFromEl = popupDom.document.getElementById('popup-from-month');
-          const pToEl = popupDom.document.getElementById('popup-to-month');
-          pFromEl.value = "2026-03";
-          pToEl.value = "2026-03";
+          const pFromEl = popupDom.document.getElementById('popup-from-date');
+          const pToEl = popupDom.document.getElementById('popup-to-date');
+          pFromEl.value = "2026-03-01";
+          pToEl.value = "2026-03-31";
           pFromEl.trigger('change');
 
           const popupHeroGross = popupDom.document.getElementById('affiliate-total-gross').textContent;
@@ -1931,31 +1940,31 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           const popupReconHtml = popupDom.document.getElementById('aff-daily-reconciliation')?.innerHTML || "";
 
           // Gap / missing source test in tax_report: select 2026-02 to 2026-03 where 2026-02 is absent
-          fromEl.value = "2026-02";
-          toEl.value = "2026-03";
+          fromEl.value = "2026-02-01";
+          toEl.value = "2026-03-31";
           fromEl.trigger('change');
           const taxDailyHtmlGap = taxDom.document.getElementById('daily-tables-container').innerHTML;
 
           // Restore to March for main asserts
-          fromEl.value = "2026-03";
-          toEl.value = "2026-03";
+          fromEl.value = "2026-03-01";
+          toEl.value = "2026-03-31";
           fromEl.trigger('change');
 
           // Gap / missing source test in popup: select 2026-02 to 2026-03
-          pFromEl.value = "2026-02";
-          pToEl.value = "2026-03";
+          pFromEl.value = "2026-02-01";
+          pToEl.value = "2026-03-31";
           pFromEl.trigger('change');
           const popupReconGap = popupDom.document.getElementById('aff-daily-reconciliation')?.innerHTML || "";
 
           // Inverted range test in popup: select 2026-05 to 2026-03 (should clear stale reconciliation)
-          pFromEl.value = "2026-05";
-          pToEl.value = "2026-03";
+          pFromEl.value = "2026-05-01";
+          pToEl.value = "2026-03-31";
           pFromEl.trigger('change');
           const popupReconInverted = popupDom.document.getElementById('aff-daily-reconciliation')?.innerHTML || "";
 
           // Restore to March for main asserts
-          pFromEl.value = "2026-03";
-          pToEl.value = "2026-03";
+          pFromEl.value = "2026-03-01";
+          pToEl.value = "2026-03-31";
           pFromEl.trigger('change');
 
           // Check S1a data extraction directly with raw list
@@ -1978,6 +1987,9 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           vm.createContext(zeroBillSandbox);
           vm.runInContext(popupCode, zeroBillSandbox);
           zeroBillDom.document.getElementById('show-affiliate').click();
+          zeroBillDom.document.getElementById('popup-from-date').value = '2026-03-01';
+          zeroBillDom.document.getElementById('popup-to-date').value = '2026-03-31';
+          zeroBillDom.document.getElementById('popup-from-date').trigger('change');
           await new Promise(r => setTimeout(r, 20));
           const zeroBillPopupGross = zeroBillDom.document.getElementById('affiliate-total-gross').textContent;
           const zeroBillDailyFoot = zeroBillDom.document.getElementById('aff-daily-tfoot').innerHTML;
@@ -2321,9 +2333,9 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           const tax1RetainedPayout = taxCache1.list.some(x => (x.paymentPayout?.payoutId || x.payoutId) === "SPV-MAR-2026");
           const tax1StatusText = domTax1.document.getElementById('status-text').textContent;
           // Trigger March selection to verify S1a display total
-          domTax1.document.getElementById('select-from-month').value = "2026-03";
-          domTax1.document.getElementById('select-to-month').value = "2026-03";
-          domTax1.document.getElementById('select-from-month').trigger('change');
+          domTax1.document.getElementById('input-from-date').value = "2026-03-01";
+          domTax1.document.getElementById('input-to-date').value = "2026-03-31";
+          domTax1.document.getElementById('input-from-date').trigger('change');
           const tax1S1aDispTotal = domTax1.document.getElementById('s1a-disp-total')?.textContent;
           const tax1HasWarn = (taxCache1.warnings || []).some(w => w.includes("Payout lỗi"));
 
@@ -2915,10 +2927,10 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
         self.assertEqual(p3["mayBillTotal"], 985000, "May 2026 billTotal must reconcile gross - fee = 985,000")
         self.assertEqual(p3["mayNetPaid"], 990200, "May 2026 observed netPaid (990,200) from API must be preserved, not overwritten with billTotal")
 
-        # 3. Payout month is untouched by fee invoice override
+        # 3. Authoritative invoice fee overrides Payout fee, while Payout Gross and Net remain independent
         self.assertTrue(p3["octHasPayout"], "Oct 2026 must be Payout priority (hasPayout true)")
         self.assertEqual(p3["octGross"], 2000000, "Oct 2026 canonical gross must be 2,000,000")
-        self.assertEqual(p3["octFee"], 200000, "Oct 2026 fee must remain Payout fee (200,000), not overridden by fee invoice")
+        self.assertEqual(p3["octFee"], 50000, "Oct 2026 fee must be overridden by authoritative invoice fee (50,000)")
         self.assertEqual(p3["octNetPaid"], 1800000, "Oct 2026 netPaid must remain Payout net (1,800,000)")
 
     def test_22_csrf_reuse_across_subsequent_pages_all_entrypoints(self):
@@ -3213,6 +3225,16 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           list: mockList
         };
 
+        const stamp = Date.parse('2026-10-27T00:00:00Z');
+        class FixedDate extends Date {
+          constructor(...args) {
+            super(...(args.length ? args : [stamp]));
+          }
+          static now() {
+            return stamp;
+          }
+        }
+
         const sandbox = {
           document: dom.document,
           window: dom.window,
@@ -3222,7 +3244,7 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           setTimeout,
           clearTimeout,
           Intl,
-          Date,
+          Date: FixedDate,
           Math,
           Number,
           String,
@@ -3241,17 +3263,14 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
         (async () => {
           await sandbox.loadAffiliateSummary();
 
-          const fromOptions = [];
-          const fromSelect = dom.elements['popup-from-month'];
-          for (const child of fromSelect.children) fromOptions.push(child.value);
-
-          const toOptions = [];
-          const toSelect = dom.elements['popup-to-month'];
-          for (const child of toSelect.children) toOptions.push(child.value);
+          const fromInput = dom.elements['popup-from-date'];
+          const toInput = dom.elements['popup-to-date'];
+          const initialFromDate = fromInput.value;
+          const initialToDate = toInput.value;
 
           // Select August only
-          fromSelect.value = '2026-08';
-          toSelect.value = '2026-08';
+          fromInput.value = '2026-08-01';
+          toInput.value = '2026-08-31';
           sandbox.updateAffiliateSummaryMetrics();
 
           const grossText = dom.elements['affiliate-total-gross'].textContent;
@@ -3259,8 +3278,8 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
           const statusText = dom.elements['affiliate-status'].textContent;
 
           console.log(JSON.stringify({
-            fromOptions,
-            toOptions,
+            initialFromDate,
+            initialToDate,
             grossText,
             netText,
             statusText
@@ -3268,10 +3287,8 @@ Ngày tạo bill\\tMã thanh toán\\tTiền sàn trả (Gross)\\tPhí DV 0,98%\\
         })();
         """
         out = self.run_node(node_script)
-        self.assertIn("2026-08", out["fromOptions"])
-        self.assertIn("2026-09", out["fromOptions"])
-        self.assertIn("2026-08", out["toOptions"])
-        self.assertIn("2026-09", out["toOptions"])
+        self.assertEqual(out["initialFromDate"], "2026-10-01")
+        self.assertEqual(out["initialToDate"], "2026-10-31")
         self.assertIn("1.000.000 đ", out["grossText"])
         self.assertIn("900.000 đ", out["netText"])
         self.assertIn("2 Payout", out["statusText"])

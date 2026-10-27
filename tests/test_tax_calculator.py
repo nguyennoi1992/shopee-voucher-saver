@@ -16,6 +16,9 @@ import json
 import calendar
 import math
 import subprocess
+import io
+import zipfile
+import xml.etree.ElementTree as ET
 
 
 # Port chính xác của decomposePayout() trong tax_report.js / popup.js (JS Math.round = floor(x+0.5))
@@ -728,11 +731,13 @@ Thg 01 2026	₫11.999	741234	Hợp lệ	Tải về
         // Test dual-track processData with both billing list and payouts
         const SERVICE_FEE_RATE = 0.0098;
         let rawBillingList = [];
+        const rmaMatch = code.match(/function readMoneyAmount\\([\\s\\S]*?^  \\}/m);
         const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
         const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
         const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
         const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
         const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        if (rmaMatch) eval(rmaMatch[0]);
         eval(decScaleMatch[0]);
         eval(epochMatch[0]);
         eval(decompMatch[0]);
@@ -797,16 +802,17 @@ Thg 01 2026	₫11.999	741234	Hợp lệ	Tải về
         self.assertEqual(fee_sum_0109, 59486, "Tổng phí DV 9 tháng đầu phải là 59.486 đ")
 
         # Tháng 10: Khớp chính xác 5 kỳ thanh toán Payout Record
-        self.assertEqual(m["2026-10"]["fee"], 2032, "Phí DV tháng 10 phải là 2.032 đ")
+        # Phí DV tháng 10: Không có hóa đơn phí DV trong dữ liệu -> fee = None ("Chưa có HĐ"), hasInvoice = False
+        self.assertIsNone(m["2026-10"]["fee"], "Phí DV tháng 10 chưa có hóa đơn phải là None")
+        self.assertFalse(m["2026-10"]["hasInvoice"], "Tháng 10 chưa có hóa đơn phí DV phải có hasInvoice = False")
         self.assertEqual(m["2026-10"]["gross"], 207288, "Gross tháng 10 phải là 207.288 đ")
-        self.assertEqual(m["2026-10"]["billTotal"], 205256, "Doanh thu hợp lệ tháng 10 phải là 205.256 đ")
+        self.assertIsNone(m["2026-10"]["billTotal"], "Sau phí HĐ khi chưa có HĐ là None (hiển thị '-')")
         self.assertEqual(m["2026-10"]["vat"], 9187, "5% VAT tháng 10 phải là 9.187 đ")
         self.assertEqual(m["2026-10"]["pit"], 9187, "5% PIT tháng 10 phải là 9.187 đ")
         self.assertEqual(m["2026-10"]["netPaid"], 186882, "Thực nhận sau thuế tháng 10 phải là 186.882 đ")
 
-        # Tổng lũy kế 10 tháng
-        total_10m_fee = sum(m[f"2026-{str(i).padStart(2, '0') if hasattr(str(i), 'padStart') else f'{i:02d}'}"]["fee"] for i in range(1, 11))
-        self.assertEqual(total_10m_fee, 61518, "Tổng phí DV 10 tháng phải là 61.518 đ (59.486 + 2.032)")
+        # Tổng phí DV 9 tháng đầu có hóa đơn
+        self.assertEqual(fee_sum_0109, 59486, "Tổng phí DV 9 tháng đầu có HĐ là 59.486 đ")
 
     def test_march_mixed_source_reconciliation_process_data(self):
         # Kiểm tra tính ưu tiên của Payout Record cho tháng 03/2026 khi có cả billing list và payout
@@ -816,11 +822,13 @@ Thg 01 2026	₫11.999	741234	Hợp lệ	Tải về
         const SERVICE_FEE_RATE = 0.0098;
         let rawBillingList = [];
 
+        const rmaMatch = code.match(/function readMoneyAmount\\([\\s\\S]*?^  \\}/m);
         const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
         const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
         const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
         const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
         const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        if (rmaMatch) eval(rmaMatch[0]);
         eval(decScaleMatch[0]);
         eval(epochMatch[0]);
         eval(decompMatch[0]);
@@ -841,6 +849,1019 @@ Thg 01 2026	₫11.999	741234	Hợp lệ	Tải về
         self.assertEqual(m3["billingGross"], 996667, "Billing gross hoàn thành đơn tháng 3 phải là 996.667 đ")
         self.assertTrue(m3["hasPayout"])
         self.assertTrue(m3["hasBilling"])
+
+    def test_authoritative_march_invoice_fee_vs_inferred_payout_fee(self):
+        """1. March invoice 9767 vs Payout inferred 11126: fee is 9767, gross 1135331, observed net independent."""
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf-8');
+        const SERVICE_FEE_RATE = 0.0098;
+        let rawBillingList = [];
+
+        const rmaMatch = code.match(/function readMoneyAmount\\([\\s\\S]*?^  \\}/m);
+        const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
+        const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
+        const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
+        const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
+        const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        if (rmaMatch) eval(rmaMatch[0]);
+        eval(decScaleMatch[0]);
+        eval(epochMatch[0]);
+        eval(decompMatch[0]);
+        eval(entryMatch[0]);
+        eval(processMatch[0]);
+
+        rawBillingList = [
+          // Payout: Gross 1,135,331 đ, Net paid 1,070,000 đ, MCN 50,000 đ, api fee 11,126 đ
+          { paymentPayout: { payoutId: "SPV-MAR", payoutCreatedTime: "1773554400", eligibleTotalAmount: "113533100000", totalPaymentAmount: "107000000000", totalServiceFee: "1112600000", mcnManagementFee: "5000000000" } },
+          // Authoritative service fee invoice for March: 9,767 đ (from service_fee_invoice)
+          { isFeeInvoice: true, monthKey: "2026-03", totalServiceFee: "976700000", invoiceNumber: "INV-MARCH-9767" }
+        ];
+
+        const res = processData();
+        console.log(JSON.stringify(res["2026-03"]));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        m = json.loads(res.stdout)
+        self.assertEqual(m["gross"], 1135331, "Gross must remain Payout gross 1,135,331")
+        self.assertEqual(m["netPaid"], 1070000, "Observed net must remain Payout net 1,070,000 unchanged")
+        self.assertEqual(m["fee"], 9767, "Authoritative invoice fee must be 9,767, overriding inferred 11,126")
+        self.assertEqual(m["invoiceFee"], 9767)
+        self.assertTrue(m["hasInvoice"])
+        self.assertEqual(m["afterFee"], 1135331 - 50000 - 9767, "Sau phí HĐ = Gross - MCN - InvoiceFee")
+
+    def test_invoice_service_period_nov_issuance_oct_period(self):
+        """2. Nov issuance with Oct service period books to Oct fee, never minus 1 blindly."""
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf-8');
+        const SERVICE_FEE_RATE = 0.0098;
+        let rawBillingList = [];
+
+        const rmaMatch = code.match(/function readMoneyAmount\\([\\s\\S]*?^  \\}/m);
+        const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
+        const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
+        const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
+        const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
+        const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        if (rmaMatch) eval(rmaMatch[0]);
+        eval(decScaleMatch[0]);
+        eval(epochMatch[0]);
+        eval(decompMatch[0]);
+        eval(entryMatch[0]);
+        eval(processMatch[0]);
+
+        // Invoice issued in November (created 2026-11-05), but service period start is in October (2026-10-01 00:00:00 GMT+7 = 1790787600)
+        rawBillingList = [
+          {
+            isFeeInvoice: true,
+            paymentCompletePeriodStartTime: "1790787600",
+            paymentCompletePeriodEndTime: "1793466000",
+            totalServiceFee: "1234500000",
+            invoiceNumber: "INV-OCT-ISSUED-NOV"
+          }
+        ];
+
+        const res = processData();
+        console.log(JSON.stringify({ oct: res["2026-10"] || null, nov: res["2026-11"] || null }));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+        self.assertIsNotNone(out["oct"], "Must book to October 2026")
+        self.assertEqual(out["oct"]["fee"], 12345, "October fee must be 12,345 đ")
+        self.assertTrue(out["oct"]["hasInvoice"])
+        self.assertIsNone(out["nov"], "Must NOT book to November 2026")
+
+    def test_zero_fee_invoice_vs_not_issued_invoice(self):
+        """3. Valid zero invoice (0 đ) is valid fee; missing invoice has fee: None ('Chưa có HĐ')."""
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf-8');
+        const SERVICE_FEE_RATE = 0.0098;
+        let rawBillingList = [];
+
+        const rmaMatch = code.match(/function readMoneyAmount\\([\\s\\S]*?^  \\}/m);
+        const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
+        const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
+        const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
+        const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
+        const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        if (rmaMatch) eval(rmaMatch[0]);
+        eval(decScaleMatch[0]);
+        eval(epochMatch[0]);
+        eval(decompMatch[0]);
+        eval(entryMatch[0]);
+        eval(processMatch[0]);
+
+        rawBillingList = [
+          // Month 1: Has valid 0 đ invoice
+          { order_completed_period_start_time: 1767200400, eligible_total_amount_dis: "500000", total_payment_amount_dis: "500000" },
+          { isFeeInvoice: true, monthKey: "2026-01", totalServiceFee: "0", invoiceNumber: "INV-ZERO" },
+
+          // Month 2: Has no invoice at all
+          { order_completed_period_start_time: 1769878800, eligible_total_amount_dis: "400000", total_payment_amount_dis: "400000" }
+        ];
+
+        const res = processData();
+        console.log(JSON.stringify({ m1: res["2026-01"], m2: res["2026-02"] }));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+        # Month 1: 0 đ invoice
+        self.assertTrue(out["m1"]["hasInvoice"])
+        self.assertEqual(out["m1"]["fee"], 0, "0 đ fee invoice must be recorded as 0 đ, not null")
+        self.assertEqual(out["m1"]["afterFee"], 500000)
+        # Month 2: Missing invoice
+        self.assertFalse(out["m2"]["hasInvoice"])
+        self.assertIsNone(out["m2"]["fee"], "Missing invoice must have fee: None")
+        self.assertIsNone(out["m2"]["afterFee"], "Missing invoice must have afterFee: None")
+
+    def test_partial_range_fee_unknown_not_prorated(self):
+        """4. Partial month range fee is unknown (null/-) and NOT prorated; Gross and Payout Net remain usable."""
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf-8');
+        const SERVICE_FEE_RATE = 0.0098;
+        let rawBillingList = [];
+
+        const rmaMatch = code.match(/function readMoneyAmount\\([\\s\\S]*?^  \\}/m);
+        const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
+        const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
+        const decompMatch = code.match(/function decomposePayout\\([\\s\\S]*?^  \\}/m);
+        const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
+        const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        if (rmaMatch) eval(rmaMatch[0]);
+        eval(decScaleMatch[0]);
+        eval(epochMatch[0]);
+        eval(decompMatch[0]);
+        eval(entryMatch[0]);
+        eval(processMatch[0]);
+
+        rawBillingList = [
+          // September 2: 100,000
+          { order_completed_period_start_time: 1788282000, eligible_total_amount_dis: "100000", total_payment_amount_dis: "100000" },
+          // September 15: 200,000
+          { order_completed_period_start_time: 1789405200, eligible_total_amount_dis: "200000", total_payment_amount_dis: "200000" },
+          // September 25: 300,000
+          { order_completed_period_start_time: 1790269200, eligible_total_amount_dis: "300000", total_payment_amount_dis: "300000" },
+          // September Payout on Sept 15: Gross 200,000, Net 180,000
+          { paymentPayout: { payoutId: "P_SEP_15", payoutCreatedTime: "1789405200", eligibleTotalAmount: "20000000000", totalPaymentAmount: "18000000000" } },
+          // Full month invoice: 4,499 đ
+          { isFeeInvoice: true, monthKey: "2026-09", totalServiceFee: "449900000", invoiceNumber: "INV-SEP" }
+        ];
+
+        // 1. Partial filter: 2026-09-10 to 2026-09-20 (includes only Sept 15)
+        const partialRes = processData("2026-09-10", "2026-09-20");
+
+        // 2. Full month filter: 2026-09-01 to 2026-09-30
+        const fullRes = processData("2026-09-01", "2026-09-30");
+
+        console.log(JSON.stringify({ partial: partialRes["2026-09"], full: fullRes["2026-09"] }));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+        partial = out["partial"]
+        full = out["full"]
+
+        # Partial month assertions
+        self.assertTrue(partial["isPartial"], "Partial range must flag isPartial = True")
+        self.assertFalse(partial["isFullMonth"], "Partial range must flag isFullMonth = False")
+        self.assertIsNone(partial["fee"], "Partial range fee must be None (do NOT prorate full month fee)")
+        self.assertIsNone(partial["afterFee"], "Partial range afterFee must be None")
+        self.assertEqual(partial["gross"], 200000, "Payout gross within partial range must remain usable")
+        self.assertEqual(partial["netPaid"], 180000, "Payout net within partial range must remain usable")
+
+        # Full month assertions
+        self.assertFalse(full["isPartial"])
+        self.assertTrue(full["isFullMonth"])
+        self.assertEqual(full["fee"], 4499, "Full month fee must be applied")
+        self.assertEqual(full["afterFee"], 200000 - 4499)
+
+    def test_date_boundaries_leap_inclusive_and_invalid_range(self):
+        """5. Oct 31 / Nov 1 GMT+7 boundary, leap day, end inclusive, range invalid (from > to)."""
+        node_script = """
+        const fs = require('fs');
+        const code = fs.readFileSync('tax_report.js', 'utf-8');
+
+        // Extract helper functions
+        const dateVnMatch = code.match(/function formatDateVn\\([\\s\\S]*?^  \\}/m);
+        const daysInMonthMatch = code.match(/function getDaysInMonth\\([\\s\\S]*?^  \\}/m);
+        const isValidDateMatch = code.match(/function isValidDateString\\([\\s\\S]*?^  \\}/m);
+        const epochMatch = code.match(/function parseEpochToGmt7\\([\\s\\S]*?^  \\}/m);
+        const rmaMatch = code.match(/function readMoneyAmount\\([\\s\\S]*?^  \\}/m);
+        const decScaleMatch = code.match(/function decScale\\([\\s\\S]*?^  \\}/m);
+        const entryMatch = code.match(/function createMonthEntry\\([\\s\\S]*?^  \\}/m);
+        const processMatch = code.match(/function processData\\([\\s\\S]*?^  \\}/m);
+        if (rmaMatch) eval(rmaMatch[0]);
+        eval(dateVnMatch[0]);
+        eval(daysInMonthMatch[0]);
+        eval(isValidDateMatch[0]);
+        eval(epochMatch[0]);
+        eval(decScaleMatch[0]);
+        eval(entryMatch[0]);
+        eval(processMatch[0]);
+
+        // 1. GMT+7 boundary test
+        // 2026-10-31 23:59:59 GMT+7 is UTC 2026-10-31 16:59:59 => epoch 1793465999
+        // 2026-11-01 00:00:00 GMT+7 is UTC 2026-10-31 17:00:00 => epoch 1793466000
+        const dtOctEnd = parseEpochToGmt7(1793465999);
+        const dtNovStart = parseEpochToGmt7(1793466000);
+
+        // 2. Leap year calendar test
+        const leap2024Valid = isValidDateString("2024-02-29");
+        const nonLeap2026Invalid = isValidDateString("2026-02-29");
+        const invalidMonth13 = isValidDateString("2026-13-01");
+        const invalidDay32 = isValidDateString("2026-01-32");
+
+        // 3. Invalid range test: from > to
+        let rawBillingList = [
+          { order_completed_period_start_time: 1790787600, eligible_total_amount_dis: "100000", total_payment_amount_dis: "100000" }
+        ];
+        const invalidRangeMap = processData("2026-10-15", "2026-10-01");
+
+        console.log(JSON.stringify({
+          octYear: dtOctEnd.getFullYear(), octMonth: dtOctEnd.getMonth() + 1, octDay: dtOctEnd.getDate(),
+          novYear: dtNovStart.getFullYear(), novMonth: dtNovStart.getMonth() + 1, novDay: dtNovStart.getDate(),
+          leap2024Valid,
+          nonLeap2026Invalid,
+          invalidMonth13,
+          invalidDay32,
+          invalidRangeKeys: Object.keys(invalidRangeMap)
+        }));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # Boundary checks
+        self.assertEqual((out["octYear"], out["octMonth"], out["octDay"]), (2026, 10, 31))
+        self.assertEqual((out["novYear"], out["novMonth"], out["novDay"]), (2026, 11, 1))
+
+        # Leap year and calendar validity
+        self.assertTrue(out["leap2024Valid"], "2024-02-29 is a valid leap year date")
+        self.assertFalse(out["nonLeap2026Invalid"], "2026-02-29 is invalid (2026 is non-leap)")
+        self.assertFalse(out["invalidMonth13"], "Month 13 is invalid")
+        self.assertFalse(out["invalidDay32"], "Day 32 is invalid")
+
+        # Invalid range returns empty map
+        self.assertEqual(len(out["invalidRangeKeys"]), 0, "from > to must filter out all records and return empty map")
+
+    def test_s1a_real_ooxml_zip_crc_and_model_matching(self):
+        """6. Preview / XLSX / DOCX matched book model + zip XML CRC validated by Python zipfile."""
+        node_script = """
+        const fs = require('fs');
+        const vm = require('vm');
+        const s1aCode = fs.readFileSync('s1a_export.js', 'utf8');
+
+        const sandbox = {
+          console,
+          TextEncoder,
+          Uint8Array,
+          DataView,
+          ArrayBuffer,
+          Blob: class MockBlob {
+            constructor(parts, opts) { this.parts = parts; this.type = opts?.type; }
+            async arrayBuffer() {
+              const totalLen = this.parts.reduce((acc, p) => acc + (p.byteLength || p.length || 0), 0);
+              const out = new Uint8Array(totalLen);
+              let offset = 0;
+              for (const p of this.parts) {
+                const u8 = p instanceof Uint8Array ? p : new Uint8Array(p);
+                out.set(u8, offset);
+                offset += u8.length;
+              }
+              return out.buffer;
+            }
+          }
+        };
+
+        vm.createContext(sandbox);
+        vm.runInContext(s1aCode, sandbox);
+
+        const S1aExport = sandbox.S1aExport || sandbox.window?.S1aExport;
+
+        const model = {
+          ownerName: "NGUYỄN VĂN A",
+          address: "Số 123 Đường ABC, Hà Nội",
+          taxCode: "0123456789",
+          businessLocation: "Kinh doanh trên nền tảng số (Shopee Affiliate)",
+          periodText: "Từ ngày 01/01/2026 đến ngày 31/03/2026",
+          unit: "đồng",
+          grouping: "monthly",
+          rows: [
+            { date: "31/01/2026", desc: "Tổng doanh thu tháng 01/2026 (gộp 3 dòng sổ)", amount: 1224353 },
+            { date: "28/02/2026", desc: "Tổng doanh thu tháng 02/2026 (gộp 2 dòng sổ)", amount: 697783 },
+            { date: "31/03/2026", desc: "Tổng doanh thu tháng 03/2026 (gộp 4 dòng sổ)", amount: 1135331 }
+          ],
+          totalAmount: 3057467,
+          signerName: "NGUYỄN VĂN A"
+        };
+
+        const xlsxBytes = Array.from(S1aExport.generateS1aXlsx(model));
+        const docxBytes = Array.from(S1aExport.generateS1aDocx(model));
+
+        console.log(JSON.stringify({
+          xlsxBytes,
+          docxBytes,
+          modelRowCount: model.rows.length,
+          modelGrandTotal: model.totalAmount
+        }));
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # 1. Validate XLSX
+        xlsx_buf = io.BytesIO(bytes(out["xlsxBytes"]))
+        with zipfile.ZipFile(xlsx_buf, "r") as z:
+            # testzip() returns None if all file CRCs in the archive are valid!
+            self.assertIsNone(z.testzip(), "XLSX ZIP CRC-32 checksums must all be valid")
+            names = z.namelist()
+            self.assertIn("[Content_Types].xml", names)
+            self.assertIn("xl/workbook.xml", names)
+            self.assertIn("xl/worksheets/sheet1.xml", names)
+
+            # Parse XML
+            sheet_xml = z.read("xl/worksheets/sheet1.xml").decode("utf-8")
+            root = ET.fromstring(sheet_xml)
+            self.assertIn("SỔ DOANH THU BÁN HÀNG HÓA, DỊCH VỤ", sheet_xml)
+            self.assertIn("NGUYỄN VĂN A", sheet_xml)
+            self.assertIn("3057467", sheet_xml)
+
+        # 2. Validate DOCX
+        docx_buf = io.BytesIO(bytes(out["docxBytes"]))
+        with zipfile.ZipFile(docx_buf, "r") as z:
+            self.assertIsNone(z.testzip(), "DOCX ZIP CRC-32 checksums must all be valid")
+            names = z.namelist()
+            self.assertIn("[Content_Types].xml", names)
+            self.assertIn("word/document.xml", names)
+
+            # Parse XML and check repeating table headers & row cantSplit
+            doc_xml = z.read("word/document.xml").decode("utf-8")
+            self.assertIn("w:tblHeader", doc_xml, "DOCX must include repeating table header (<w:tblHeader/>)")
+            self.assertIn("w:cantSplit", doc_xml, "DOCX must include <w:cantSplit/> on rows")
+            self.assertIn("NGUYỄN VĂN A", doc_xml)
+            self.assertIn("3.057.467", doc_xml)
+            self.assertIn("Mẫu số S1a-HKD", doc_xml)
+            self.assertIn("Thông tư số 152/2025/TT-BTC", doc_xml)
+
+    def test_calendar_source_authority_browser_scenario_and_s1a_export(self):
+        """Track 1 & 3: Browser check 2026-03-19 to 2026-04-20: March canon 0, April 200,000, S1a omits March, unified DTO."""
+        node_script = r'''
+        const { createMockDOM } = require('./tests/affiliate_harness.js');
+        const fs = require('fs');
+        const vm = require('vm');
+
+        const march5 = Math.floor(new Date('2026-03-05T10:00:00+07:00').getTime() / 1000);
+        const march18 = Math.floor(new Date('2026-03-18T10:00:00+07:00').getTime() / 1000);
+        const march25 = Math.floor(new Date('2026-03-25T10:00:00+07:00').getTime() / 1000);
+        const april18 = Math.floor(new Date('2026-04-18T10:00:00+07:00').getTime() / 1000);
+
+        const testData = [
+          { paymentPayout: { payoutId: 'P-MAR-1', payoutCreatedTime: String(march5), eligibleTotalAmount: '50000000000', totalPaymentAmount: '45000000000' } },
+          { paymentPayout: { payoutId: 'P-MAR-2', payoutCreatedTime: String(march18), eligibleTotalAmount: '60000000000', totalPaymentAmount: '55000000000' } },
+          { order_completed_period_start_time: march25, eligible_total_amount_dis: '1000', total_payment_amount_dis: '1000' },
+          { paymentPayout: { payoutId: 'P-APR-1', payoutCreatedTime: String(april18), eligibleTotalAmount: '20000000000', totalPaymentAmount: '19000000000' } }
+        ];
+
+        const taxDom = createMockDOM();
+        const taxSandbox = {
+          document: taxDom.document,
+          window: taxDom.window,
+          chrome: taxDom.chrome,
+          localStorage: taxDom.localStorage,
+          console,
+          setTimeout,
+          clearTimeout,
+          fetch: async () => ({ ok: true, json: async () => ({}) }),
+          TextEncoder,
+          Uint8Array,
+          DataView,
+          ArrayBuffer
+        };
+
+        const s1aCode = fs.readFileSync('s1a_export.js', 'utf8');
+        const taxCode = fs.readFileSync('tax_report.js', 'utf8');
+        vm.createContext(taxSandbox);
+        vm.runInContext(s1aCode, taxSandbox);
+        vm.runInContext(taxCode, taxSandbox);
+
+        taxDom.document.getElementById('paste-textarea').value = JSON.stringify(testData);
+        taxDom.document.getElementById('btn-parse-paste').click();
+
+        taxDom.document.getElementById('input-from-date').value = '2026-03-19';
+        taxDom.document.getElementById('input-to-date').value = '2026-04-20';
+
+        const months = taxSandbox.window.processData('2026-03-19', '2026-04-20');
+        const march = months['2026-03'];
+        const april = months['2026-04'];
+        const model = taxSandbox.window.getS1aCurrentModel();
+        const S1aExport = taxSandbox.S1aExport || taxSandbox.window.S1aExport;
+
+        const xlsxBytes = Array.from(S1aExport.generateS1aXlsx(model));
+        const docxBytes = Array.from(S1aExport.generateS1aDocx(model));
+
+        console.log(JSON.stringify({
+          marchGross: march.gross,
+          marchBillingGross: march.billingGross,
+          marchHasPayout: march.hasPayout,
+          aprilGross: april.gross,
+          model,
+          xlsxBytes,
+          docxBytes
+        }));
+        '''
+        res = subprocess.run(['node', '-e', node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # 1. Process data: March canon payout is 0 (not flipped to billing 1000)
+        self.assertEqual(out["marchGross"], 0, "March canon payout in partial range with no selected payout must be 0")
+        self.assertEqual(out["marchBillingGross"], 1000, "March billing gross recorded for daily table")
+        self.assertTrue(out["marchHasPayout"])
+        self.assertEqual(out["aprilGross"], 200000, "April gross must be 200,000")
+
+        # 2. S1a model: March (0 transactions in range) is omitted, only April is exported
+        model = out["model"]
+        self.assertIsNone(model["error"])
+        self.assertEqual(model["periodText"], "Từ ngày 19/03/2026 đến ngày 20/04/2026")
+        self.assertEqual(len(model["rows"]), 1, "S1a must omit no-transaction month (March)")
+        self.assertEqual(model["rows"][0]["amount"], 200000)
+        self.assertEqual(model["rows"][0]["date"], "20/04/2026", "Clamped to end date of range")
+        self.assertEqual(model["totalAmount"], 200000)
+        self.assertTrue(len(model["signDay"]) > 0 and len(model["signMonth"]) > 0 and len(model["signYear"]) > 0)
+        self.assertIn("Ngày", model["signDateFormatted"])
+
+        # 3. XLSX and DOCX zip validity
+        z_xlsx = zipfile.ZipFile(io.BytesIO(bytes(out["xlsxBytes"])))
+        self.assertIsNone(z_xlsx.testzip(), "Exported XLSX must be valid zip")
+        z_docx = zipfile.ZipFile(io.BytesIO(bytes(out["docxBytes"])))
+        self.assertIsNone(z_docx.testzip(), "Exported DOCX must be valid zip")
+
+    def test_monetary_scaling_dis_vs_raw(self):
+        """Track 4: Monetary scaling - 1738600000 raw vs '17386' dis match, explicit 0 dis no fallback, dot thousand separators."""
+        node_script = r'''
+        const fs = require('fs');
+        const taxCode = fs.readFileSync('tax_report.js', 'utf8');
+        const popupCode = fs.readFileSync('popup.js', 'utf8');
+
+        const decScaleTaxMatch = taxCode.match(/function decScale\([\s\S]*?\n  \}/m);
+        const rmaTaxMatch = taxCode.match(/function readMoneyAmount\([\s\S]*?\n  \}/m);
+        const decScalePopupMatch = popupCode.match(/function affiliateDecScale\([\s\S]*?\n\}/m);
+        const rmaPopupMatch = popupCode.match(/function readMoneyAmountPopup\([\s\S]*?\n\}/m);
+
+        eval(decScaleTaxMatch[0]);
+        eval(rmaTaxMatch[0]);
+        eval(decScalePopupMatch[0]);
+        eval(rmaPopupMatch[0]);
+
+        console.log(JSON.stringify({
+          taxWithDis: readMoneyAmount('17386', 1738600000),
+          taxWithoutDis: readMoneyAmount(undefined, 1738600000),
+          popupWithDis: readMoneyAmountPopup('17386', 1738600000),
+          popupWithoutDis: readMoneyAmountPopup(undefined, 1738600000),
+          taxZeroDis: readMoneyAmount(0, 1738600000),
+          taxZeroStrDis: readMoneyAmount('0', 1738600000),
+          popupZeroDis: readMoneyAmountPopup(0, 1738600000),
+          popupZeroStrDis: readMoneyAmountPopup('0', 1738600000),
+          taxAggDis: readMoneyAmount('8.735.477', undefined),
+          popupAggDis: readMoneyAmountPopup('8.735.477', undefined)
+        }));
+        '''
+        res = subprocess.run(['node', '-e', node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # 1. 1738600000 vs "17386" match with _dis removed
+        self.assertEqual(out["taxWithDis"], 17386)
+        self.assertEqual(out["taxWithoutDis"], 17386)
+        self.assertEqual(out["popupWithDis"], 17386)
+        self.assertEqual(out["popupWithoutDis"], 17386)
+
+        # 2. Explicit 0 dis must not truthy-fallback to raw
+        self.assertEqual(out["taxZeroDis"], 0)
+        self.assertEqual(out["taxZeroStrDis"], 0)
+        self.assertEqual(out["popupZeroDis"], 0)
+        self.assertEqual(out["popupZeroStrDis"], 0)
+
+        # 3. Aggregate localized thousands separator
+        self.assertEqual(out["taxAggDis"], 8735477)
+        self.assertEqual(out["popupAggDis"], 8735477)
+
+    def test_actual_9_cycles_invoices_and_deduplication(self):
+        """Track 4: 9 cycles fixture from real contract, sum 59486, duplicate PDF/XLSX = 1 fee."""
+        with open('docs/examples/shopee/service_fee_invoice_list.sample.json') as f:
+            sample_invoices = json.load(f)
+
+        node_script = r'''
+        const { createMockDOM } = require('./tests/affiliate_harness.js');
+        const fs = require('fs');
+        const vm = require('vm');
+
+        const taxDom = createMockDOM();
+        const taxSandbox = {
+          document: taxDom.document,
+          window: taxDom.window,
+          chrome: taxDom.chrome,
+          localStorage: taxDom.localStorage,
+          console,
+          setTimeout,
+          clearTimeout,
+          fetch: async () => ({ ok: true, json: async () => ({}) })
+        };
+
+        const taxCode = fs.readFileSync('tax_report.js', 'utf8');
+        vm.createContext(taxSandbox);
+        vm.runInContext(taxCode, taxSandbox);
+
+        const sample = JSON.parse(process.argv[1]);
+        taxDom.document.getElementById('paste-textarea').value = JSON.stringify(sample);
+        taxDom.document.getElementById('btn-parse-paste').click();
+
+        const months = taxSandbox.window.processData('2026-01-01', '2026-10-31');
+        let feeSum = 0;
+        const feesByMonth = {};
+        for (const [mKey, mObj] of Object.entries(months)) {
+          if (mObj.fee > 0) {
+            feeSum += mObj.fee;
+            feesByMonth[mKey] = mObj.fee;
+          }
+        }
+
+        console.log(JSON.stringify({ feeSum, feesByMonth }));
+        '''
+        res = subprocess.run(['node', '-e', node_script, json.dumps(sample_invoices)], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # 9 cycles sum = 59,486 đ
+        self.assertEqual(out["feeSum"], 59486, "Sum of 9 actual invoice cycles must equal 59,486 đ")
+        self.assertEqual(out["feesByMonth"]["2026-09"], 4499, "Sep 02 - Oct 01 maps to Sep fee 4,499 đ")
+        self.assertEqual(out["feesByMonth"]["2026-03"], 9767, "Mar 02 - Apr 01 maps to Mar fee 9,767 đ")
+        self.assertEqual(out["feesByMonth"]["2026-01"], 11999, "Jan 02 - Feb 01 maps to Jan fee 11,999 đ")
+
+    def test_incomplete_pagination_paste_protection(self):
+        """Track 6: Manual paste with incomplete pagination (10/99) is rejected and does not overwrite cache."""
+        node_script = r'''
+        const { createMockDOM } = require('./tests/affiliate_harness.js');
+        const fs = require('fs');
+        const vm = require('vm');
+
+        const taxDom = createMockDOM();
+        taxDom.chrome.storage.local._store['shopee_affiliate_billing_cache_v2'] = {
+          updatedAt: Date.now(),
+          list: [{ paymentPayout: { payoutId: 'ORIGINAL-1', payoutCreatedTime: '1773554400', eligibleTotalAmount: '100000000', totalPaymentAmount: '90000000' } }]
+        };
+
+        const taxSandbox = {
+          document: taxDom.document,
+          window: taxDom.window,
+          chrome: taxDom.chrome,
+          localStorage: taxDom.localStorage,
+          console,
+          setTimeout,
+          clearTimeout,
+          fetch: async () => ({ ok: true, json: async () => ({}) })
+        };
+
+        const taxCode = fs.readFileSync('tax_report.js', 'utf8');
+        vm.createContext(taxSandbox);
+        vm.runInContext(taxCode, taxSandbox);
+
+        // 1. Incomplete pagination payload (10 items, totalCount 99)
+        const incompletePayload = {
+          data: {
+            getPaymentPayoutBillingList: {
+              payoutList: Array.from({ length: 10 }, (_, i) => ({
+                paymentPayout: { payoutId: `NEW-${i}`, payoutCreatedTime: '1773554400', eligibleTotalAmount: '100000000', totalPaymentAmount: '90000000' }
+              })),
+              pagination: {
+                pageNum: 1,
+                pageSize: 10,
+                totalCount: '99'
+              }
+            }
+          }
+        };
+
+        taxDom.document.getElementById('paste-textarea').value = JSON.stringify(incompletePayload);
+        taxDom.document.getElementById('btn-parse-paste').click();
+
+        const statusText = taxDom.document.getElementById('status-text')?.textContent || '';
+        const storeAfterIncomplete = taxDom.chrome.storage.local._store['shopee_affiliate_billing_cache_v2'];
+
+        // 2. Bare array paste (manual fixture) should succeed
+        const bareArrayPayload = [
+          { paymentPayout: { payoutId: 'BARE-1', payoutCreatedTime: '1773554400', eligibleTotalAmount: '500000000', totalPaymentAmount: '450000000' } }
+        ];
+        taxDom.document.getElementById('paste-textarea').value = JSON.stringify(bareArrayPayload);
+        taxDom.document.getElementById('btn-parse-paste').click();
+        const storeAfterBare = taxDom.chrome.storage.local._store['shopee_affiliate_billing_cache_v2'];
+
+        console.log(JSON.stringify({
+          statusText,
+          retainedOriginalPid: storeAfterIncomplete.list[0].paymentPayout.payoutId,
+          bareArrayAcceptedPid: storeAfterBare.list[0].paymentPayout.payoutId
+        }));
+        '''
+        res = subprocess.run(['node', '-e', node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # Incomplete pagination rejected with clear message 10/99
+        self.assertIn("10/99", out["statusText"])
+        self.assertIn("Fetch Live", out["statusText"])
+        self.assertEqual(out["retainedOriginalPid"], "ORIGINAL-1", "Original cache must be preserved")
+
+        # Bare array accepted
+        self.assertEqual(out["bareArrayAcceptedPid"], "BARE-1")
+
+    def test_date_presentation_dmy_even_us_locale_and_picker_invocation(self):
+        """Verify user-visible DD/MM/YYYY text input, calendar button invocation, and invalid typed date export block."""
+        node_script = """
+        const fs = require('fs');
+        const vm = require('vm');
+        const { createMockDOM } = require('./tests/affiliate_harness.js');
+
+        const taxDom = createMockDOM();
+        let lastAlert = null;
+        taxDom.chrome.storage.local._store["shopee_affiliate_billing_cache_v2"] = {
+          updatedAt: Date.now(),
+          list: [
+            { paymentPayout: { payoutId: "PAY-OCT", payoutCreatedTime: "1791140407", eligibleTotalAmount: "3823000000", totalPaymentAmount: "3403000000" } }
+          ]
+        };
+
+        const taxSandbox = {
+          document: taxDom.document,
+          window: taxDom.window,
+          chrome: taxDom.chrome,
+          localStorage: taxDom.localStorage,
+          alert: (msg) => { lastAlert = msg; },
+          console,
+          setTimeout,
+          clearTimeout,
+          fetch: async () => ({ ok: true, json: async () => ({}) })
+        };
+
+        const taxCode = fs.readFileSync('tax_report.js', 'utf8');
+        vm.createContext(taxSandbox);
+        vm.runInContext(taxCode, taxSandbox);
+
+        setTimeout(async () => {
+          // 1. Initial populated date format in user-visible text inputs
+          const fromTextEl = taxDom.document.getElementById('input-from-date-text');
+          const toTextEl = taxDom.document.getElementById('input-to-date-text');
+          const fromInputEl = taxDom.document.getElementById('input-from-date');
+          const toInputEl = taxDom.document.getElementById('input-to-date');
+          const btnFromCal = taxDom.document.getElementById('btn-from-calendar');
+
+          const initialFromText = fromTextEl.value;
+          const initialToText = toTextEl.value;
+
+          // 2. Click native calendar button invokes showPicker
+          btnFromCal.click();
+          const showPickerInvoked = Boolean(fromInputEl._showPickerCalled);
+
+          // 3. User types valid DD/MM/YYYY into visible input
+          fromTextEl.value = "15/10/2026";
+          fromTextEl.trigger('change');
+          const syncedIsoFrom = fromInputEl.value;
+
+          // 4. Inclusive date boundary check
+          const filteredMap = taxSandbox.window.processData("2026-10-05", "2026-10-05");
+          const boundaryGross = filteredMap["2026-10"] ? filteredMap["2026-10"].gross : 0;
+
+          // 5. User-visible month format in monthly table and title
+          const monthlyTableHtml = taxDom.document.getElementById('monthly-tbody').innerHTML;
+          const monthlyTitleText = taxDom.document.getElementById('monthly-table-title').textContent;
+
+          // 6. User types invalid date -> error state and exports blocked
+          fromTextEl.value = "99/99/2026";
+          fromTextEl.trigger('change');
+          const hasErrorClass = fromTextEl.classList.contains("is-invalid");
+          const errorFeedbackText = taxDom.document.getElementById('input-from-date-error')?.textContent || "";
+
+          lastAlert = null;
+          taxDom.document.getElementById('btn-export-csv').click();
+          const csvBlockedAlert = lastAlert;
+
+          lastAlert = null;
+          taxDom.document.getElementById('btn-export-excel').click();
+          const excelBlockedAlert = lastAlert;
+
+          lastAlert = null;
+          taxDom.document.getElementById('btn-s1a-export-excel').click();
+          const s1aExcelBlockedAlert = lastAlert;
+
+          console.log(JSON.stringify({
+            initialFromText,
+            initialToText,
+            showPickerInvoked,
+            syncedIsoFrom,
+            boundaryGross,
+            monthlyTableHtml,
+            monthlyTitleText,
+            hasErrorClass,
+            errorFeedbackText,
+            csvBlockedAlert,
+            excelBlockedAlert,
+            s1aExcelBlockedAlert
+          }));
+        }, 50);
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # Visible dates formatted DD/MM/YYYY
+        self.assertRegex(out["initialFromText"], r"^\d{2}/\d{2}/\d{4}$")
+        self.assertRegex(out["initialToText"], r"^\d{2}/\d{2}/\d{4}$")
+        self.assertTrue(out["showPickerInvoked"], "Native calendar button must invoke showPicker()")
+
+        # Valid typed DD/MM/YYYY updates canonical ISO input
+        self.assertEqual(out["syncedIsoFrom"], "2026-10-15")
+
+        # Inclusive date filter includes 05/10/2026 payout
+        self.assertEqual(out["boundaryGross"], 38230)
+
+        # Month format MM/YYYY in table and titles
+        self.assertIn("10/2026", out["monthlyTableHtml"])
+
+        # Invalid typed date sets error class and blocks exports
+        self.assertTrue(out["hasErrorClass"])
+        self.assertIn("không hợp lệ", out["errorFeedbackText"])
+        self.assertIn("không hợp lệ", str(out["csvBlockedAlert"]))
+        self.assertIn("không hợp lệ", str(out["excelBlockedAlert"]))
+        self.assertIn("không hợp lệ", str(out["s1aExcelBlockedAlert"]))
+
+    def test_payout_38230_reconciliation_dialog_whole_cache_join(self):
+        """Verify ONE own feature: READONLY Đối chiếu kỳ Payout joins whole cache, shows 3824 diff, and preserves 38230 S1a Gross."""
+        node_script = """
+        const fs = require('fs');
+        const vm = require('vm');
+        const { createMockDOM } = require('./tests/affiliate_harness.js');
+
+        const fixture = JSON.parse(fs.readFileSync('docs/examples/shopee/payout_38230_reconciliation.sample.json', 'utf8'));
+        const taxDom = createMockDOM();
+
+        // Feed fixture (1 PayoutRecord + 4 BillingRecords) into cache
+        const allRecords = [fixture.payoutRecord, ...fixture.billingRecords];
+        taxDom.chrome.storage.local._store["shopee_affiliate_billing_cache_v2"] = {
+          updatedAt: Date.now(),
+          list: allRecords
+        };
+
+        const taxSandbox = {
+          document: taxDom.document,
+          window: taxDom.window,
+          chrome: taxDom.chrome,
+          localStorage: taxDom.localStorage,
+          alert: (msg) => {},
+          console,
+          setTimeout,
+          clearTimeout,
+          fetch: async () => ({ ok: true, json: async () => ({}) })
+        };
+
+        const taxCode = fs.readFileSync('tax_report.js', 'utf8');
+        vm.createContext(taxSandbox);
+        vm.runInContext(taxCode, taxSandbox);
+
+        setTimeout(async () => {
+          // 1. Filter to October 2026 only
+          const fromInputEl = taxDom.document.getElementById('input-from-date');
+          const toInputEl = taxDom.document.getElementById('input-to-date');
+          fromInputEl.value = "2026-10-01";
+          toInputEl.value = "2026-10-31";
+          fromInputEl.trigger('change');
+
+          // Check S1a table and model
+          const s1aModel = taxSandbox.window.getS1aCurrentModel();
+          const s1aTotalText = taxDom.document.getElementById('s1a-disp-total')?.textContent;
+
+          // Verify S1a model rows have 3 columns without 4th column
+          const firstRow = s1aModel.rows[0];
+          const hasFourthCol = firstRow && firstRow.extraCol !== undefined;
+
+          // 2. Open Reconciliation Dialog for DEMO_PAYOUT_0005
+          taxSandbox.window.openPayoutReconDialog("DEMO_PAYOUT_0005");
+          const dialog = taxDom.document.getElementById('dialog-payout-recon');
+          const dialogBodyHtml = taxDom.document.getElementById('payout-recon-body')?.innerHTML || '';
+          const dialogTitleText = taxDom.document.getElementById('payout-recon-title')?.textContent || '';
+          const dialogIsOpen = Boolean(dialog._open);
+
+          // 3. Test Incomplete Cache Warning: remove Sep 30 billing record
+          const incompleteRecords = [
+            fixture.payoutRecord,
+            ...fixture.billingRecords.filter(b => b.validation_id !== "DEMO_VAL_0006")
+          ];
+          taxDom.chrome.storage.local._store["shopee_affiliate_billing_cache_v2"] = {
+            updatedAt: Date.now(),
+            list: incompleteRecords
+          };
+          await taxSandbox.window.fetchLiveFromTab(false);
+          taxSandbox.window.openPayoutReconDialog("DEMO_PAYOUT_0005");
+          const incompleteDialogHtml = taxDom.document.getElementById('payout-recon-body')?.innerHTML || '';
+          const s1aModelAfterIncomplete = taxSandbox.window.getS1aCurrentModel();
+
+          console.log(JSON.stringify({
+            s1aGrandTotal: s1aModel.grandTotal,
+            s1aTotalText,
+            hasFourthCol,
+            dialogIsOpen,
+            dialogTitleText,
+            dialogBodyHtml,
+            incompleteDialogHtml,
+            s1aGrossUntouched: s1aModelAfterIncomplete.grandTotal
+          }));
+        }, 50);
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # S1a canonical Gross remains exactly 38,230 VND
+        self.assertEqual(out["s1aGrandTotal"], 38230)
+        self.assertEqual(out["s1aTotalText"], "38.230")
+        self.assertFalse(out["hasFourthCol"], "No 4th column should be added to S1a model")
+
+        # Dialog opened successfully
+        self.assertTrue(out["dialogIsOpen"])
+        self.assertIn("DEMO_PAYOUT_0005", out["dialogTitleText"])
+
+        # Dialog displays creation vs arrival dates
+        self.assertIn("05/10/2026", out["dialogBodyHtml"])
+        self.assertIn("08/10/2026", out["dialogBodyHtml"])
+
+        # Dialog joins all 4 billing records from whole cache (including Sep 30: DEMO_VAL_0006)
+        self.assertIn("DEMO_VAL_0006", out["dialogBodyHtml"])
+        self.assertIn("DEMO_VAL_0007", out["dialogBodyHtml"])
+        self.assertIn("DEMO_VAL_0008", out["dialogBodyHtml"])
+        self.assertIn("DEMO_VAL_0004", out["dialogBodyHtml"])
+        self.assertIn("30/09/2026", out["dialogBodyHtml"])
+
+        # Dialog displays financial breakdown:
+        # Payout Gross 38.230, Payout Net 34.030, Billing Net 37.854, Billing deduction 376, Payout diff 3.824
+        self.assertIn("38.230 đ", out["dialogBodyHtml"])
+        self.assertIn("34.030 đ", out["dialogBodyHtml"])
+        self.assertIn("37.854 đ", out["dialogBodyHtml"])
+        self.assertIn("376 đ", out["dialogBodyHtml"])
+        self.assertIn("3.824 đ", out["dialogBodyHtml"])
+
+        # Matching coverage banner
+        self.assertIn("Khớp hoàn toàn độ bao phủ", out["dialogBodyHtml"])
+
+        # Incomplete cache displays clear warning banner without modifying S1a gross
+        self.assertIn("Cảnh báo độ bao phủ", out["incompleteDialogHtml"])
+        self.assertIn("KHÔNG khớp", out["incompleteDialogHtml"])
+        self.assertEqual(out["s1aGrossUntouched"], 38230, "S1a Gross must never be overwritten on coverage mismatch")
+
+    def test_calendar_known_billing_month_zero_days_not_missing_source(self):
+        """Verify known raw Billing month with no selected row renders days with 0, not missing source."""
+        node_script = """
+        const fs = require('fs');
+        const vm = require('vm');
+        const { createMockDOM } = require('./tests/affiliate_harness.js');
+
+        const taxDom = createMockDOM();
+        // Raw cache contains Billing in Oct (Oct 1-3)
+        taxDom.chrome.storage.local._store["shopee_affiliate_billing_cache_v2"] = {
+          updatedAt: Date.now(),
+          list: [
+            { order_completed_period_start_time: 1790787600, eligible_total_amount_dis: "9557", total_payment_amount_dis: "9463" }
+          ]
+        };
+
+        const taxSandbox = {
+          document: taxDom.document,
+          window: taxDom.window,
+          chrome: taxDom.chrome,
+          localStorage: taxDom.localStorage,
+          alert: (msg) => {},
+          console,
+          setTimeout,
+          clearTimeout,
+          fetch: async () => ({ ok: true, json: async () => ({}) })
+        };
+
+        const taxCode = fs.readFileSync('tax_report.js', 'utf8');
+        vm.createContext(taxSandbox);
+        vm.runInContext(taxCode, taxSandbox);
+
+        setTimeout(async () => {
+          // Select Oct 15 - Oct 20 (no billing rows occurred on these days, but Oct is known in raw cache)
+          const filteredMap = taxSandbox.window.processData("2026-10-15", "2026-10-20");
+          const octEntry = filteredMap["2026-10"];
+
+          // Select wholly absent month Nov 2026
+          const novFilteredMap = taxSandbox.window.processData("2026-11-01", "2026-11-30");
+          const novEntry = novFilteredMap["2026-11"];
+
+          console.log(JSON.stringify({
+            octKnownBilling: Boolean(octEntry && octEntry.hasBilling),
+            octBillingGross: octEntry ? octEntry.billingGross : null,
+            novKnownBilling: Boolean(novEntry && novEntry.hasBilling)
+          }));
+        }, 50);
+        """
+        res = subprocess.run(["node", "-e", node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+
+        # Known billing month retains hasBilling=true with 0 gross for unselected days
+        self.assertTrue(out["octKnownBilling"], "Known raw billing month must retain hasBilling=true")
+        self.assertEqual(out["octBillingGross"], 0, "No rows in selected days renders gross 0")
+
+        # Wholly absent month remains hasBilling=false
+        self.assertFalse(out["novKnownBilling"], "Wholly absent month remains missing hasBilling=false")
+
+
+    def test_current_month_gmt7_defaults_full_and_popup(self):
+        """Deterministic test for current GMT+7 month defaults on both full tax_report and popup:
+        Oct27 2026, Oct31 18:00UTC => Nov GMT+7, leap Feb2028; empty cache and old-month cache.
+        Asserts visible DD/MM/YYYY and internal ISO; preserves manually set valid range across popup refresh.
+        """
+        node_script = r"""
+        const fs = require('fs');
+        const vm = require('vm');
+        const assert = require('assert');
+        const { createMockDOM } = require('./tests/affiliate_harness.js');
+
+        async function testScenario(file, instantIso, expectedFromIso, expectedToIso, hasOldCache) {
+          const stamp = Date.parse(instantIso);
+          class FixedDate extends Date {
+            constructor(...args) {
+              super(...(args.length ? args : [stamp]));
+            }
+            static now() { return stamp; }
+          }
+
+          const dom = createMockDOM();
+          const prefix = file === 'popup.js' ? 'popup' : 'input';
+
+          if (hasOldCache) {
+            dom.chrome.storage.local._store['shopee_affiliate_billing_cache_v2'] = {
+              updatedAt: stamp,
+              list: [{ order_completed_period_start_time: 1767200400, eligible_total_amount_dis: '1000', total_payment_amount_dis: '1000' }]
+            };
+          }
+
+          const sandbox = {
+            ...dom,
+            Date: FixedDate,
+            console: { log() {}, warn() {}, error() {} },
+            setTimeout,
+            clearTimeout,
+            alert() {},
+            fetch: async () => ({ ok: true, json: async () => ({}) })
+          };
+
+          vm.createContext(sandbox);
+          vm.runInContext(fs.readFileSync(file, 'utf8'), sandbox);
+
+          if (file === 'popup.js') {
+            await sandbox.loadAffiliateSummary();
+          }
+          await new Promise(r => setTimeout(r, 60));
+
+          const fromVal = dom.document.getElementById(`${prefix}-from-date`).value;
+          const toVal = dom.document.getElementById(`${prefix}-to-date`).value;
+          const fromText = dom.document.getElementById(`${prefix}-from-date-text`).value;
+          const toText = dom.document.getElementById(`${prefix}-to-date-text`).value;
+
+          const expFromDmy = expectedFromIso.split('-').reverse().join('/');
+          const expToDmy = expectedToIso.split('-').reverse().join('/');
+
+          assert.strictEqual(fromVal, expectedFromIso, `${file} ${instantIso} from ISO`);
+          assert.strictEqual(toVal, expectedToIso, `${file} ${instantIso} to ISO`);
+          assert.strictEqual(fromText, expFromDmy, `${file} ${instantIso} from DMY`);
+          assert.strictEqual(toText, expToDmy, `${file} ${instantIso} to DMY`);
+
+          if (file === 'popup.js') {
+            dom.document.getElementById(`${prefix}-from-date`).value = '2026-03-02';
+            dom.document.getElementById(`${prefix}-to-date`).value = '2026-04-09';
+            await sandbox.loadAffiliateSummary();
+            assert.strictEqual(dom.document.getElementById(`${prefix}-from-date`).value, '2026-03-02', 'Preserve from on refresh');
+            assert.strictEqual(dom.document.getElementById(`${prefix}-to-date`).value, '2026-04-09', 'Preserve to on refresh');
+          }
+        }
+
+        (async () => {
+          const scenarios = [
+            ['2026-10-27T00:00:00Z', '2026-10-01', '2026-10-31'],
+            ['2026-10-31T18:00:00Z', '2026-11-01', '2026-11-30'],
+            ['2028-02-15T00:00:00Z', '2028-02-01', '2028-02-29']
+          ];
+
+          for (const file of ['tax_report.js', 'popup.js']) {
+            for (const hasCache of [false, true]) {
+              for (const [instant, fromIso, toIso] of scenarios) {
+                await testScenario(file, instant, fromIso, toIso, hasCache);
+              }
+            }
+          }
+          console.log(JSON.stringify({ ok: true, scenariosTested: 12 }));
+        })().catch(e => {
+          console.error(e);
+          process.exit(1);
+        });
+        """
+        res = subprocess.run(['node', '-e', node_script], capture_output=True, text=True, check=True)
+        out = json.loads(res.stdout)
+        self.assertTrue(out['ok'])
+        self.assertEqual(out['scenariosTested'], 12)
 
 
 if __name__ == "__main__":

@@ -425,12 +425,21 @@
       <div id="affiliate-status" class="status">Sử dụng trên tab affiliate.shopee.vn/payment/payout_record để lấy doanh thu chuẩn nhất.</div>
 
       <div class="scan-panel">
-        <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between;">
-          <div style="font-size: 12px; color: var(--muted); font-weight: 600;">Chọn khoảng tháng:</div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <select id="popup-from-month" style="background:var(--bg-soft); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px;"></select>
-            <span style="font-size:12px; color:var(--muted);">-</span>
-            <select id="popup-to-month" style="background:var(--bg-soft); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px;"></select>
+        <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+          <div style="font-size: 12px; color: var(--muted); font-weight: 600;">Chọn khoảng ngày:</div>
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <label for="popup-from-date-text" style="font-size:12px; color:var(--muted);">Từ ngày:</label>
+            <div style="position:relative; display:inline-flex; align-items:center;">
+              <input type="text" id="popup-from-date-text" placeholder="dd/mm/yyyy" maxlength="10" autocomplete="off" style="width:82px; background:var(--bg-soft); color:var(--text); border:1px solid var(--line); border-radius:6px 0 0 6px; padding:3px 5px; font-size:12px;" aria-label="Từ ngày (dd/mm/yyyy)">
+              <button type="button" id="btn-popup-from-calendar" class="no-print" aria-label="Mở lịch chọn Từ ngày" title="Chọn ngày từ lịch" style="border:1px solid var(--line); border-left:none; border-radius:0 6px 6px 0; background:var(--bg-soft); cursor:pointer; padding:3px 5px; font-size:11px;">📅</button>
+              <input type="date" id="popup-from-date" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none; border:0; padding:0; margin:0;" aria-hidden="true" tabindex="-1">
+            </div>
+            <label for="popup-to-date-text" style="font-size:12px; color:var(--muted); margin-left:2px;">Đến ngày:</label>
+            <div style="position:relative; display:inline-flex; align-items:center;">
+              <input type="text" id="popup-to-date-text" placeholder="dd/mm/yyyy" maxlength="10" autocomplete="off" style="width:82px; background:var(--bg-soft); color:var(--text); border:1px solid var(--line); border-radius:6px 0 0 6px; padding:3px 5px; font-size:12px;" aria-label="Đến ngày (dd/mm/yyyy)">
+              <button type="button" id="btn-popup-to-calendar" class="no-print" aria-label="Mở lịch chọn Đến ngày" title="Chọn ngày từ lịch" style="border:1px solid var(--line); border-left:none; border-radius:0 6px 6px 0; background:var(--bg-soft); cursor:pointer; padding:3px 5px; font-size:11px;">📅</button>
+              <input type="date" id="popup-to-date" style="position:absolute; opacity:0; width:0; height:0; pointer-events:none; border:0; padding:0; margin:0;" aria-hidden="true" tabindex="-1">
+            </div>
           </div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 10px;">
@@ -489,12 +498,12 @@
               <th>HH gộp</th>
               <th>Phí MCN</th>
               <th>Sau MCN</th>
-              <th>Phí DV 0,98%</th>
-              <th>Thực nhận bill</th>
-              <th>10% TNCN</th>
-              <th>5% GTGT</th>
-              <th>5% TNCN</th>
-              <th>Ước về TK</th>
+              <th>Phí DV (HĐ)</th>
+              <th>Sau phí HĐ (suy luận)</th>
+              <th>10% TNCN*</th>
+              <th>5% GTGT*</th>
+              <th>5% TNCN*</th>
+              <th>Thực nhận (Payout thực tế)</th>
             </tr>
           </thead>
           <tbody id="aff-full-tbody">

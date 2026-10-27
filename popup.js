@@ -11,8 +11,12 @@ const affiliateView = document.getElementById("affiliate-view");
 const openTaxPageButton = document.getElementById("open-tax-page");
 const fetchAffiliateDataButton = document.getElementById("fetch-affiliate-data");
 const affiliateStatusEl = document.getElementById("affiliate-status");
-const popupFromMonth = document.getElementById("popup-from-month");
-const popupToMonth = document.getElementById("popup-to-month");
+const popupFromDate = document.getElementById("popup-from-date");
+const popupToDate = document.getElementById("popup-to-date");
+const popupFromDateText = document.getElementById("popup-from-date-text");
+const popupToDateText = document.getElementById("popup-to-date-text");
+const btnPopupFromCalendar = document.getElementById("btn-popup-from-calendar");
+const btnPopupToCalendar = document.getElementById("btn-popup-to-calendar");
 const popupExportExcel = document.getElementById("popup-export-excel");
 const popupExportCsv = document.getElementById("popup-export-csv");
 const affiliateTotalGross = document.getElementById("affiliate-total-gross");
@@ -344,6 +348,149 @@ function setAffiliateStatus(msg, type = "") {
   affiliateStatusEl.className = `status${type ? ` ${type}` : ""}`;
 }
 
+function isValidDateStringPopup(str) {
+  if (typeof str !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+  const [y, m, d] = str.split("-").map(Number);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === (m - 1) && dt.getUTCDate() === d;
+}
+
+function getDaysInMonthPopup(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+function formatIsoToDmyPopup(isoStr) {
+  if (!isoStr || typeof isoStr !== "string") return "";
+  const parts = isoStr.trim().split("-");
+  if (parts.length !== 3) return "";
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
+function parseDmyToIsoPopup(str) {
+  if (!str || typeof str !== "string") return "";
+  const s = str.trim();
+  if (!s) return "";
+  const match = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (!match) return null;
+  const d = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const y = parseInt(match[3], 10);
+  if (y < 2000 || y > 2100 || m < 1 || m > 12 || d < 1) return null;
+  const daysInM = getDaysInMonthPopup(y, m);
+  if (d > daysInM) return null;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function formatMonthLabelPopup(mKey) {
+  if (!mKey || typeof mKey !== "string") return "";
+  const parts = mKey.trim().split("-");
+  if (parts.length < 2) return mKey;
+  return `${parts[1]}/${parts[0]}`;
+}
+
+function syncIsoToTextPopup(canonicalEl, textEl) {
+  if (!canonicalEl || !textEl) return;
+  const val = canonicalEl.value;
+  if (val && isValidDateStringPopup(val)) {
+    textEl.value = formatIsoToDmyPopup(val);
+    delete canonicalEl.dataset.hasParseError;
+  } else if (!val && !canonicalEl.dataset.hasParseError) {
+    textEl.value = "";
+  }
+}
+
+function setupDateInputPairPopup(canonicalEl, textEl, btnEl) {
+  if (!canonicalEl) return;
+  if (btnEl) {
+    btnEl.addEventListener("click", () => {
+      if (typeof canonicalEl.showPicker === "function") {
+        try {
+          canonicalEl.showPicker();
+          return;
+        } catch (e) {}
+      }
+      canonicalEl.focus();
+      canonicalEl.click();
+    });
+  }
+  if (textEl) {
+    const handleInput = () => {
+      const raw = textEl.value.trim();
+      if (!raw) {
+        delete canonicalEl.dataset.hasParseError;
+        if (canonicalEl.value !== "") {
+          canonicalEl.value = "";
+          updateAffiliateSummaryMetrics();
+        }
+        return;
+      }
+      if (raw.length < 10) {
+        canonicalEl.dataset.hasParseError = "true";
+        return;
+      }
+      const iso = parseDmyToIsoPopup(raw);
+      if (iso) {
+        delete canonicalEl.dataset.hasParseError;
+        canonicalEl.value = iso;
+        updateAffiliateSummaryMetrics();
+      } else {
+        canonicalEl.dataset.hasParseError = "true";
+        canonicalEl.value = "";
+        updateAffiliateSummaryMetrics();
+      }
+    };
+    const handleCommit = () => {
+      const raw = textEl.value.trim();
+      if (!raw) {
+        delete canonicalEl.dataset.hasParseError;
+        if (canonicalEl.value !== "") {
+          canonicalEl.value = "";
+          updateAffiliateSummaryMetrics();
+        }
+        return;
+      }
+      const iso = parseDmyToIsoPopup(raw);
+      if (iso) {
+        delete canonicalEl.dataset.hasParseError;
+        textEl.value = formatIsoToDmyPopup(iso);
+        canonicalEl.value = iso;
+        updateAffiliateSummaryMetrics();
+      } else {
+        canonicalEl.dataset.hasParseError = "true";
+        canonicalEl.value = "";
+        updateAffiliateSummaryMetrics();
+      }
+    };
+    textEl.addEventListener("input", handleInput);
+    textEl.addEventListener("change", handleCommit);
+    textEl.addEventListener("blur", handleCommit);
+  }
+  canonicalEl.addEventListener("change", () => {
+    syncIsoToTextPopup(canonicalEl, textEl);
+  });
+}
+
+function getInvoiceServiceMonthPopup(it) {
+  if (it.monthKey && /^\d{4}-\d{2}$/.test(it.monthKey)) {
+    return it.monthKey;
+  }
+  let s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
+  let e = parseInt(it.paymentCompletePeriodEndTime || 0, 10);
+  if (!s && it.paymentSummaryBillFeeInvoices && it.paymentSummaryBillFeeInvoices.length > 0) {
+    const first = it.paymentSummaryBillFeeInvoices[0];
+    s = parseInt(first.paymentCompletePeriodStartTime || 0, 10);
+    e = parseInt(first.paymentCompletePeriodEndTime || 0, 10);
+  }
+  if (s > 0 && s < 1e11) {
+    const dtStart = new Date(s * 1000 + 7 * 3600000);
+    const yStart = dtStart.getUTCFullYear();
+    const mStart = dtStart.getUTCMonth() + 1;
+    return `${yStart}-${String(mStart).padStart(2, "0")}`;
+  }
+  return null;
+}
+
 // Amounts từ Shopee trả về dạng micro-unit (x100.000), ví dụ "7179000000" = 71.790 đ
 // decompose luôn nhận micro-unit (API thật / text dán / cache cũ đều x100.000 trước khi nhập)
 function affiliateDecScale(val) {
@@ -351,6 +498,25 @@ function affiliateDecScale(val) {
   const num = Number(String(val).trim());
   if (!Number.isFinite(num) || num < 0) return 0;
   return Math.round(num / 100000);
+}
+
+function readMoneyAmountPopup(disVal, rawVal) {
+  if (disVal !== undefined && disVal !== null) {
+    if (typeof disVal === "number") {
+      return Number.isFinite(disVal) && disVal >= 0 ? disVal : 0;
+    }
+    const str = String(disVal).trim();
+    if (str !== "") {
+      if (/^\d+$/.test(str)) return Number(str);
+      if (/^\d{1,3}(?:\.\d{3})+$/.test(str)) return Number(str.replace(/\./g, ""));
+      const n = Number(str.replace(/,/g, "."));
+      if (Number.isFinite(n) && n >= 0) return n;
+    }
+  }
+  if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== "") {
+    return affiliateDecScale(rawVal);
+  }
+  return 0;
 }
 
 const AFFILIATE_SERVICE_FEE_RATE = 0.0098; // 0.98%
@@ -408,7 +574,8 @@ function decomposeAffiliatePayout(it, mKey) {
   }
 
   const billTotal = Math.max(0, afterMcn - fee);
-  const net = paid > 0 ? paid : Math.max(0, billTotal - vat - pit - wht10);
+  const hasExplicitPaid = (p.totalPaymentAmount !== undefined && p.totalPaymentAmount !== null && String(p.totalPaymentAmount).trim() !== "");
+  const net = hasExplicitPaid ? paid : Math.max(0, billTotal - vat - pit - wht10);
   return { gross, mcn, fee, vat, pit, wht10, billTotal, net };
 }
 
@@ -435,57 +602,29 @@ async function loadAffiliateSummary() {
     }
   });
 
+  const gmt7Now = new Date(Date.now() + 7 * 3600000);
+  const curY = gmt7Now.getUTCFullYear();
+  const curM = gmt7Now.getUTCMonth() + 1;
+  const curMm = String(curM).padStart(2, "0");
+  const lastDay = getDaysInMonthPopup(curY, curM);
+  const defaultFrom = `${curY}-${curMm}-01`;
+  const defaultTo = `${curY}-${curMm}-${String(lastDay).padStart(2, "0")}`;
+
+  if (popupFromDate && (!popupFromDate.value || !isValidDateStringPopup(popupFromDate.value))) {
+    popupFromDate.value = defaultFrom;
+  }
+  if (popupToDate && (!popupToDate.value || !isValidDateStringPopup(popupToDate.value))) {
+    popupToDate.value = defaultTo;
+  }
+  if (popupFromDate && popupFromDateText) syncIsoToTextPopup(popupFromDate, popupFromDateText);
+  if (popupToDate && popupToDateText) syncIsoToTextPopup(popupToDate, popupToDateText);
+
   cachedAffiliateList = Array.isArray(cached?.list)
     ? cached.list.filter(x => Boolean(x) && typeof x === "object" && !Array.isArray(x))
     : [];
   if (cachedAffiliateList.length === 0) {
     setAffiliateStatus("Chưa có dữ liệu cache. Hãy bấm 'Đồng bộ dữ liệu' từ tab Affiliate hoặc mở Sổ tay thuế.");
     return;
-  }
-
-  // Find all months
-  const monthsSet = new Set();
-  for (const it of cachedAffiliateList) {
-    if (!it || typeof it !== "object" || it.isFeeInvoice) continue;
-    let s = it.order_completed_period_start_time;
-    if (s === undefined || s === null || String(s).trim() === "") {
-      const p = it.paymentPayout || it;
-      let rawTime = p.payoutCreatedTime ?? it.payoutCreatedTime;
-      if (rawTime === undefined || rawTime === null || String(rawTime).trim() === "") {
-        rawTime = p.payArrivalTime ?? it.payArrivalTime;
-      }
-      s = rawTime;
-    }
-    if (s === undefined || s === null || String(s).trim() === "") continue;
-    const numTime = Number(String(s).trim());
-    if (!Number.isFinite(numTime) || numTime <= 0 || numTime >= 1e11) continue;
-    const sec = Math.floor(numTime);
-    const dt = new Date(sec * 1000 + 7 * 3600000);
-    const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-    monthsSet.add(m);
-  }
-
-  const sortedMonths = Array.from(monthsSet).sort();
-  const curFrom = popupFromMonth.value;
-  const curTo = popupToMonth.value;
-
-  popupFromMonth.innerHTML = "";
-  popupToMonth.innerHTML = "";
-
-  for (const m of sortedMonths) {
-    const o1 = document.createElement("option");
-    o1.value = m; o1.textContent = m;
-    popupFromMonth.appendChild(o1);
-
-    const o2 = document.createElement("option");
-    o2.value = m; o2.textContent = m;
-    popupToMonth.appendChild(o2);
-  }
-
-  if (sortedMonths.length > 0) {
-    const first2026 = sortedMonths.find(m => m.startsWith("2026-01")) || sortedMonths[0];
-    popupFromMonth.value = curFrom && sortedMonths.includes(curFrom) ? curFrom : first2026;
-    popupToMonth.value = curTo && sortedMonths.includes(curTo) ? curTo : sortedMonths[sortedMonths.length - 1];
   }
 
   updateAffiliateSummaryMetrics();
@@ -523,17 +662,32 @@ function enumerateCalendarMonthsPopup(startM, endM) {
 }
 
 function updateAffiliateSummaryMetrics() {
-  const fromM = popupFromMonth.value;
-  const toM = popupToMonth.value;
-
-  if (fromM && toM && fromM > toM) {
+  if (popupFromDate?.dataset.hasParseError || popupToDate?.dataset.hasParseError ||
+      popupFromDateText?.classList.contains("is-invalid") || popupToDateText?.classList.contains("is-invalid")) {
     const affDailyReconEl = document.getElementById("aff-daily-reconciliation");
     if (affDailyReconEl) affDailyReconEl.innerHTML = "";
-    affSimpleTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affSimpleTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:18px;">Ngày nhập vào không hợp lệ (định dạng DD/MM/YYYY)</td></tr>`;
     affSimpleTfoot.innerHTML = "";
-    affFullTbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affFullTbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:18px;">Ngày nhập vào không hợp lệ (định dạng DD/MM/YYYY)</td></tr>`;
     affFullTfoot.innerHTML = "";
-    affDailyTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:18px;">Chưa có dữ liệu</td></tr>`;
+    affDailyTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:18px;">Ngày nhập vào không hợp lệ (định dạng DD/MM/YYYY)</td></tr>`;
+    affDailyTfoot.innerHTML = "";
+    affiliateTotalGross.textContent = "--";
+    affiliateNetTk.textContent = "--";
+    affiliateTaxTotal.textContent = "--";
+    return;
+  }
+  const fromDate = (popupFromDate && isValidDateStringPopup(popupFromDate.value)) ? popupFromDate.value : "";
+  const toDate = (popupToDate && isValidDateStringPopup(popupToDate.value)) ? popupToDate.value : "";
+
+  if (fromDate && toDate && fromDate > toDate) {
+    const affDailyReconEl = document.getElementById("aff-daily-reconciliation");
+    if (affDailyReconEl) affDailyReconEl.innerHTML = "";
+    affSimpleTbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:18px;">Khoảng ngày lọc không hợp lệ (Từ ngày > Đến ngày)</td></tr>`;
+    affSimpleTfoot.innerHTML = "";
+    affFullTbody.innerHTML = `<tr><td colspan="10" style="text-align:center; padding:18px;">Khoảng ngày lọc không hợp lệ (Từ ngày > Đến ngày)</td></tr>`;
+    affFullTfoot.innerHTML = "";
+    affDailyTbody.innerHTML = `<tr><td colspan="3" style="text-align:center; padding:18px;">Khoảng ngày lọc không hợp lệ (Từ ngày > Đến ngày)</td></tr>`;
     affDailyTfoot.innerHTML = "";
     affiliateTotalGross.textContent = "--";
     affiliateNetTk.textContent = "--";
@@ -555,18 +709,88 @@ function updateAffiliateSummaryMetrics() {
   const monthlyMap = {};
   const dailyMap = {};
   const feeInvoicesMap = {};
+  const hasInvoiceFeeMap = {};
   const seenInvoiceKeys = new Set();
   for (const it of cachedAffiliateList) {
-    if (it.isFeeInvoice || (it.paymentSummaryBillFeeInvoices && it.totalServiceFee) || (it.paymentCompletePeriodStartTime && it.totalServiceFee && !it.order_completed_period_start_time)) {
-      const s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
-      const dt = new Date(s * 1000 + 7 * 3600000);
-      const m = it.monthKey || (s ? `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}` : null);
+    if (it.isFeeInvoice || (it.paymentSummaryBillFeeInvoices && it.totalServiceFee !== undefined) || (it.paymentCompletePeriodStartTime && it.totalServiceFee !== undefined && !it.order_completed_period_start_time)) {
+      const m = getInvoiceServiceMonthPopup(it);
       if (!m) continue;
       const invId = it.invoiceNumber || it.paymentSummaryBillFeeInvoices?.[0]?.invoiceNumber || "";
-      const dedupKey = invId ? `${invId}_${m}` : `${s || 0}_${it.totalServiceFee || 0}_${m}`;
+      const s = parseInt(it.paymentCompletePeriodStartTime || 0, 10);
+      const dedupKey = invId ? `inv_${invId}` : `${s || 0}_${it.totalServiceFee || 0}_${m}`;
       if (seenInvoiceKeys.has(dedupKey)) continue;
       seenInvoiceKeys.add(dedupKey);
+      hasInvoiceFeeMap[m] = true;
       feeInvoicesMap[m] = (feeInvoicesMap[m] || 0) + affiliateDecScale(it.totalServiceFee);
+    }
+  }
+
+  // 0. Xác định các tháng có nguồn Payout gốc và nguồn Billing gốc trong raw cache
+  const rawPayoutMonths = new Set();
+  const rawBillingMonths = new Set();
+  for (const it of cachedAffiliateList) {
+    if (!it || typeof it !== "object" || it.isFeeInvoice) continue;
+    if (it.paymentPayout || it.payoutId || it.payoutCreatedTime || it.payArrivalTime) {
+      const p = it.paymentPayout || it;
+      let rawTime = p.payoutCreatedTime ?? it.payoutCreatedTime ?? p.payArrivalTime ?? it.payArrivalTime;
+      if (rawTime === undefined || rawTime === null || String(rawTime).trim() === "") continue;
+      const numTime = Number(String(rawTime).trim());
+      if (!Number.isFinite(numTime) || numTime <= 0 || numTime >= 1e11) continue;
+      const dt = new Date(numTime * 1000 + 7 * 3600000);
+      rawPayoutMonths.add(`${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`);
+    } else {
+      const s = it.order_completed_period_start_time;
+      if (!s) continue;
+      const dt = new Date(s * 1000 + 7 * 3600000);
+      rawBillingMonths.add(`${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`);
+    }
+  }
+
+  const fromM = fromDate ? fromDate.slice(0, 7) : "";
+  const toM = toDate ? toDate.slice(0, 7) : "";
+  for (const mKey of rawPayoutMonths) {
+    if ((!fromM || mKey >= fromM) && (!toM || mKey <= toM)) {
+      if (!monthlyMap[mKey]) {
+        monthlyMap[mKey] = {
+          month: mKey,
+          gross: 0,
+          mcn: 0,
+          billTotal: 0,
+          wht10: 0,
+          pit: 0,
+          vat: 0,
+          fee: 0,
+          netPaid: 0,
+          hasPayout: true,
+          hasBilling: false,
+          billingGross: 0,
+          totalRecords: 0
+        };
+      }
+    }
+  }
+
+  for (const mKey of rawBillingMonths) {
+    if ((!fromM || mKey >= fromM) && (!toM || mKey <= toM)) {
+      if (!monthlyMap[mKey]) {
+        monthlyMap[mKey] = {
+          month: mKey,
+          gross: 0,
+          mcn: 0,
+          billTotal: 0,
+          wht10: 0,
+          pit: 0,
+          vat: 0,
+          fee: 0,
+          netPaid: 0,
+          hasPayout: rawPayoutMonths.has(mKey),
+          hasBilling: true,
+          billingGross: 0,
+          totalRecords: 0
+        };
+      } else {
+        monthlyMap[mKey].hasBilling = true;
+      }
     }
   }
 
@@ -576,19 +800,24 @@ function updateAffiliateSummaryMetrics() {
     const s = it.order_completed_period_start_time;
     if (!s) continue;
     const dt = new Date(s * 1000 + 7 * 3600000);
-    const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-    if (fromM && m < fromM) continue;
-    if (toM && m > toM) continue;
+    const yStr = dt.getUTCFullYear();
+    const mStr = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const dStr = String(dt.getUTCDate()).padStart(2, "0");
+    const dateKey = `${yStr}-${mStr}-${dStr}`;
+    const m = `${yStr}-${mStr}`;
 
-    const gross = parseFloat(it.eligible_total_amount_dis || it.eligible_total_amount || 0) || 0;
-    const mcn = parseFloat(it.mcn_management_fee_dis || it.mcn_management_fee || 0) || 0;
-    const billTotal = parseFloat(it.total_payment_amount_dis || it.total_payment_amount || 0) || 0;
-    const whtAmt = parseFloat(it.wht_amount_dis || it.pit_amount_dis || it.wht_amount || it.pit_amount || 0) || 0;
-    const vatAmt = parseFloat(it.vat_amount_dis || it.vat_amount || 0) || 0;
-    let feeAmt = parseFloat(it.service_fee_dis || it.service_fee || 0) || 0;
+    if (fromDate && dateKey < fromDate) continue;
+    if (toDate && dateKey > toDate) continue;
+
+    const gross = readMoneyAmountPopup(it.eligible_total_amount_dis, it.eligible_total_amount);
+    const mcn = readMoneyAmountPopup(it.mcn_management_fee_dis, it.mcn_management_fee);
+    const billTotal = readMoneyAmountPopup(it.total_payment_amount_dis, it.total_payment_amount);
+    const whtAmt = readMoneyAmountPopup(it.wht_amount_dis ?? it.pit_amount_dis, it.wht_amount ?? it.pit_amount);
+    const vatAmt = readMoneyAmountPopup(it.vat_amount_dis, it.vat_amount);
+    let feeAmt = readMoneyAmountPopup(it.service_fee_dis, it.service_fee);
     if (Array.isArray(it.bills)) {
       for (const b of it.bills) {
-        feeAmt += parseFloat(b.service_fee_dis || b.service_fee || 0) || 0;
+        feeAmt += readMoneyAmountPopup(b.service_fee_dis, b.service_fee);
       }
     }
     if (feeAmt === 0 && billTotal > 0 && (gross - mcn) > billTotal) {
@@ -606,22 +835,25 @@ function updateAffiliateSummaryMetrics() {
         vat: 0,
         fee: 0,
         netPaid: 0,
-        hasPayout: false,
+        hasPayout: rawPayoutMonths.has(m),
         hasBilling: false
       };
     }
     monthlyMap[m].hasBilling = true;
     monthlyMap[m].billingGross = (monthlyMap[m].billingGross || 0) + gross;
-    monthlyMap[m].gross += gross;
-    monthlyMap[m].mcn += mcn;
-    monthlyMap[m].billTotal += billTotal;
-    monthlyMap[m].wht10 += whtAmt;
-    monthlyMap[m].pit += whtAmt;
-    monthlyMap[m].vat += vatAmt;
-    monthlyMap[m].fee += feeAmt;
-    monthlyMap[m].netPaid += billTotal;
+    // Tháng có nguồn Payout gốc: Payout là nguồn chuẩn duy nhất cho doanh thu gộp và thực nhận
+    if (!rawPayoutMonths.has(m)) {
+      monthlyMap[m].gross += gross;
+      monthlyMap[m].mcn += mcn;
+      monthlyMap[m].billTotal += billTotal;
+      monthlyMap[m].wht10 += whtAmt;
+      monthlyMap[m].pit += whtAmt;
+      monthlyMap[m].vat += vatAmt;
+      monthlyMap[m].fee += feeAmt;
+      monthlyMap[m].netPaid += billTotal;
+    }
 
-    const dayStr = `${String(dt.getUTCDate()).padStart(2, "0")}/${String(dt.getUTCMonth() + 1).padStart(2, "0")}/${dt.getUTCFullYear()}`;
+    const dayStr = `${dStr}/${mStr}/${yStr}`;
     if (!dailyMap[dayStr]) {
       dailyMap[dayStr] = {
         dateStr: dayStr,
@@ -652,9 +884,13 @@ function updateAffiliateSummaryMetrics() {
 
     const s = Math.floor(numTime);
     const dt = new Date(s * 1000 + 7 * 3600000);
-    const m = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}`;
-    if (fromM && m < fromM) continue;
-    if (toM && m > toM) continue;
+    const yStr = dt.getUTCFullYear();
+    const mStr = String(dt.getUTCMonth() + 1).padStart(2, "0");
+    const dStr = String(dt.getUTCDate()).padStart(2, "0");
+    const dateKey = `${yStr}-${mStr}-${dStr}`;
+    const m = `${yStr}-${mStr}`;
+    if (fromDate && dateKey < fromDate) continue;
+    if (toDate && dateKey > toDate) continue;
 
     // 2. Xác thực số tiền hoa hồng gộp
     const rawAmt = p.eligibleTotalAmount;
@@ -678,7 +914,6 @@ function updateAffiliateSummaryMetrics() {
       seenPayouts.set(payoutId, { amt, s, mKey: m });
     }
 
-    // Cho MỌI tháng có Payout: Payout Record là chuẩn đối soát tài chính
     if (!monthlyMap[m] || !monthlyMap[m].hasPayout) {
       const hadBilling = Boolean(monthlyMap[m]?.hasBilling);
       const prevBillingGross = monthlyMap[m]?.billingGross || 0;
@@ -707,22 +942,59 @@ function updateAffiliateSummaryMetrics() {
     monthlyMap[m].vat += d.vat;
     monthlyMap[m].fee += d.fee;
     monthlyMap[m].netPaid += d.net;
-    // Tuyệt đối không đưa payout vào bảng kê ngày hoàn thành đơn!
   }
 
-  // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử từ service_fee_invoice cho các tháng hạch toán theo billing
-  // Không ghi đè các tháng đã có Payout Record thực tế (Payout ghi nhận theo ngày chi trả tiền mặt)
-  for (const m of Object.keys(feeInvoicesMap)) {
-    if (fromM && m < fromM) continue;
-    if (toM && m > toM) continue;
-    if (monthlyMap[m] && !monthlyMap[m].hasPayout) {
-      monthlyMap[m].fee = feeInvoicesMap[m];
-      monthlyMap[m].billTotal = Math.max(0, monthlyMap[m].gross - monthlyMap[m].mcn - monthlyMap[m].fee);
+  // Đảm bảo các tháng chỉ có hóa đơn (không có billing/payout) vẫn xuất hiện nếu thuộc phạm vi lọc
+  for (const mKey of Object.keys(feeInvoicesMap)) {
+    if ((!fromM || mKey >= fromM) && (!toM || mKey <= toM)) {
+      if (!monthlyMap[mKey]) {
+        monthlyMap[mKey] = {
+          month: mKey,
+          gross: 0,
+          mcn: 0,
+          billTotal: 0,
+          wht10: 0,
+          pit: 0,
+          vat: 0,
+          fee: 0,
+          netPaid: 0,
+          hasPayout: false,
+          hasBilling: false,
+          billingGross: 0,
+          totalRecords: 0
+        };
+      }
+    }
+  }
+
+  // Pass 3: Áp dụng Hóa đơn phí dịch vụ điện tử từ service_fee_invoice
+  // Định chế chuẩn: HĐ phí DV có hiệu lực pháp lý cao nhất cho toàn bộ tháng đã chọn
+  for (const m of Object.keys(monthlyMap)) {
+    const [y, mon] = m.split("-").map(Number);
+    const daysInM = getDaysInMonthPopup(y, mon);
+    const mStart = `${m}-01`;
+    const mEnd = `${m}-${String(daysInM).padStart(2, "0")}`;
+    const isFullMonth = (!fromDate || fromDate <= mStart) && (!toDate || toDate >= mEnd);
+    monthlyMap[m].isFullMonth = isFullMonth;
+
+    if (hasInvoiceFeeMap[m]) {
+      monthlyMap[m].invoiceFee = feeInvoicesMap[m] || 0;
+      monthlyMap[m].hasInvoice = true;
+      if (isFullMonth) {
+        monthlyMap[m].fee = feeInvoicesMap[m] || 0;
+      } else {
+        monthlyMap[m].fee = null; // Khoảng ngày một phần tháng: chưa đủ cơ sở tính phí
+      }
+    } else {
+      monthlyMap[m].hasInvoice = false;
+      monthlyMap[m].fee = null; // Chưa có HĐ
     }
   }
 
   // Đồng bộ tính toán theo tháng và theo tab đảm bảo khớp chuẩn kế toán
   const sortedMonths = Object.keys(monthlyMap).sort();
+  let feeSummaryComplete = true;
+
   for (const m of sortedMonths) {
     const data = monthlyMap[m];
     const gross = data.gross;
@@ -730,50 +1002,33 @@ function updateAffiliateSummaryMetrics() {
     const afterMcn = gross - mcn;
     const isOctober2026Onwards = m >= "2026-10";
 
-    let feeDv = 0;
+    const feeDv = data.fee; // number | null
+    const afterFee = (feeDv !== null) ? Math.max(0, afterMcn - feeDv) : null;
+
     let wht10 = 0;
     let vat5 = 0;
     let tncnKd5 = 0;
-    let billReal = 0;
     let netTk = 0;
 
     if (data.hasPayout) {
-      // Dữ liệu từ Payout Record - chuẩn đối soát từng bill
-      feeDv = data.fee;
-      billReal = data.billTotal;
       wht10 = data.wht10;
       vat5 = data.vat;
       tncnKd5 = data.pit;
-      netTk = data.netPaid > 0 ? data.netPaid : (billReal - wht10 - vat5 - tncnKd5);
+      netTk = data.netPaid; // Thực nhận Payout giữ nguyên
     } else if (isOctober2026Onwards) {
-      // Từ 10/2026: Tách 5% VAT và 5% PIT, 10% vãng lai = 0
-      feeDv = data.fee > 0 ? data.fee : 0;
-      wht10 = 0;
-      vat5 = data.vat > 0 ? data.vat : Math.round(afterMcn * 0.05);
-      tncnKd5 = data.pit > 0 ? data.pit : Math.round(afterMcn * 0.05);
-      billReal = afterMcn - feeDv;
-      netTk = billReal - wht10 - vat5 - tncnKd5;
+      vat5 = Math.round(afterMcn * 0.05);
+      tncnKd5 = Math.round(afterMcn * 0.05);
+      netTk = (afterFee !== null ? afterFee : afterMcn) - vat5 - tncnKd5;
     } else {
-      // Trước 10/2026: Shopee trừ phí dịch vụ 0.98% trực tiếp vào billTotal
-      if (data.fee > 0) {
-        feeDv = data.fee;
-      } else if (data.billTotal > 0 && afterMcn > data.billTotal) {
-        feeDv = Math.round(afterMcn - data.billTotal);
-      } else {
-        feeDv = 0;
-      }
-      wht10 = data.wht10 > 0 ? data.wht10 : 0;
-      vat5 = data.vat > 0 ? data.vat : 0;
-      tncnKd5 = 0;
-      billReal = afterMcn - feeDv;
-      netTk = billReal - wht10 - vat5 - tncnKd5;
+      wht10 = Math.round(afterMcn * 0.10);
+      netTk = (afterFee !== null ? afterFee : afterMcn) - wht10;
     }
 
     const taxMonth = wht10 + vat5 + tncnKd5;
 
     data.afterMcn = afterMcn;
     data.feeDv = feeDv;
-    data.bill = billReal;
+    data.afterFee = afterFee;
     data.taxVangLai = wht10;
     data.taxVat = vat5;
     data.taxPitKd = tncnKd5;
@@ -782,8 +1037,14 @@ function updateAffiliateSummaryMetrics() {
     totalGross += gross;
     totalMcn += mcn;
     totalAfterMcn += afterMcn;
-    totalFeeDv += feeDv;
-    totalBill += billReal;
+    if (feeDv !== null) {
+      totalFeeDv += feeDv;
+    } else {
+      feeSummaryComplete = false;
+    }
+    if (afterFee !== null) {
+      totalBill += afterFee;
+    }
     totalTaxVangLai += wht10;
     totalTaxVat += vat5;
     totalTaxPitKd += tncnKd5;
@@ -818,9 +1079,27 @@ function updateAffiliateSummaryMetrics() {
       ? '<span style="font-size:10px; color:#0984e3; margin-left:3px;">[Payout]</span>'
       : (hasBilling ? '<span style="font-size:10px; color:#d35400; margin-left:3px;">[Billing]</span>' : '');
 
+    let feeHtml = "";
+    if (r.feeDv === null) {
+      if (!r.isFullMonth) {
+        if (r.hasInvoice && r.invoiceFee !== undefined && r.invoiceFee !== null) {
+          feeHtml = `<span style="color:#e67e22;" title="Hóa đơn phí dịch vụ tính theo chu kỳ ngày 02 đến ngày 01 tháng sau: ${formatCurrency(r.invoiceFee)}; không áp dụng cho khoảng ngày lẻ">- (${formatCurrency(r.invoiceFee)})</span>`;
+        } else {
+          feeHtml = '<span style="color:#e67e22;" title="Hóa đơn phí dịch vụ tính theo cả kỳ; không áp dụng cho khoảng ngày lẻ">-</span>';
+        }
+      } else {
+        feeHtml = '<span style="color:var(--muted);" title="Chưa có hóa đơn phí dịch vụ">Chưa có HĐ</span>';
+      }
+    } else {
+      feeHtml = formatCurrency(r.feeDv);
+    }
+
+    const afterFeeHtml = (r.afterFee !== null) ? formatCurrency(r.afterFee) : "-";
+
+    const mLabel = formatMonthLabelPopup(m);
     simpleRows.push(`
       <tr>
-        <td class="sticky-col">${m}</td>
+        <td class="sticky-col" data-month="${m}">${mLabel}</td>
         <td style="text-align:left;">Doanh thu từ Shopee ${sourceLabel}</td>
         <td>${formatCurrency(r.gross)}</td>
         <td style="color:#2ed573; font-weight:600;">${formatCurrency(r.netTk)}</td>
@@ -829,12 +1108,12 @@ function updateAffiliateSummaryMetrics() {
 
     fullRows.push(`
       <tr>
-        <td class="sticky-col">${m}${badge}</td>
+        <td class="sticky-col" data-month="${m}">${mLabel}${badge}</td>
         <td>${formatCurrency(r.gross)}</td>
         <td>${formatCurrency(r.mcn)}</td>
         <td>${formatCurrency(r.afterMcn)}</td>
-        <td>${formatCurrency(r.feeDv)}</td>
-        <td>${formatCurrency(r.bill)}</td>
+        <td>${feeHtml}</td>
+        <td>${afterFeeHtml}</td>
         <td>${formatCurrency(r.taxVangLai)}</td>
         <td>${formatCurrency(r.taxVat)}</td>
         <td>${formatCurrency(r.taxPitKd)}</td>
@@ -853,6 +1132,9 @@ function updateAffiliateSummaryMetrics() {
     </tr>
   `;
 
+  const totalFeeDisplay = feeSummaryComplete ? formatCurrency(totalFeeDv) : '<span style="color:var(--muted); font-size:11px;">Chưa đủ HĐ</span>';
+  const totalAfterFeeDisplay = feeSummaryComplete ? formatCurrency(totalBill) : "-";
+
   affFullTbody.innerHTML = fullRows.join("");
   affFullTfoot.innerHTML = `
     <tr>
@@ -860,8 +1142,8 @@ function updateAffiliateSummaryMetrics() {
       <td>${formatCurrency(totalGross)}</td>
       <td>${formatCurrency(totalMcn)}</td>
       <td>${formatCurrency(totalAfterMcn)}</td>
-      <td>${formatCurrency(totalFeeDv)}</td>
-      <td>${formatCurrency(totalBill)}</td>
+      <td>${totalFeeDisplay}</td>
+      <td>${totalAfterFeeDisplay}</td>
       <td>${formatCurrency(totalTaxVangLai)}</td>
       <td>${formatCurrency(totalTaxVat)}</td>
       <td>${formatCurrency(totalTaxPitKd)}</td>
@@ -876,7 +1158,9 @@ function updateAffiliateSummaryMetrics() {
     totalDailyBilling += d.amount;
   }
 
-  const selectedCalendarMonths = (fromM && toM) ? enumerateCalendarMonthsPopup(fromM, toM) : sortedMonths;
+  const startM = fromDate ? fromDate.slice(0, 7) : (sortedMonths[0] || "");
+  const endM = toDate ? toDate.slice(0, 7) : (sortedMonths[sortedMonths.length - 1] || "");
+  const selectedCalendarMonths = (startM && endM) ? enumerateCalendarMonthsPopup(startM, endM) : sortedMonths;
   let allBillingComplete = true;
   let allPayoutComplete = true;
   let totalBillingInSelected = 0;
@@ -908,10 +1192,10 @@ function updateAffiliateSummaryMetrics() {
     } else {
       const billingLabel = allBillingComplete
         ? `${formatCurrency(totalBillingInSelected)}`
-        : `Chưa đầy đủ (thiếu ${missingBillingMonths.map(m => m.slice(5) + '/' + m.slice(0, 4)).join(', ')})`;
+        : `Chưa đầy đủ (thiếu ${missingBillingMonths.map(formatMonthLabelPopup).join(', ')})`;
       const payoutLabel = allPayoutComplete
         ? `${formatCurrency(totalPayoutInSelected)}`
-        : `Chưa đầy đủ (thiếu ${missingPayoutMonths.map(m => m.slice(5) + '/' + m.slice(0, 4)).join(', ')})`;
+        : `Chưa đầy đủ (thiếu ${missingPayoutMonths.map(formatMonthLabelPopup).join(', ')})`;
 
       let reconDiffHtml = "";
       if (allBillingComplete && allPayoutComplete) {
@@ -1572,8 +1856,10 @@ openTaxPageButton.addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("tax_report.html") });
 });
 fetchAffiliateDataButton.addEventListener("click", fetchAffiliateLive);
-popupFromMonth.addEventListener("change", updateAffiliateSummaryMetrics);
-popupToMonth.addEventListener("change", updateAffiliateSummaryMetrics);
+setupDateInputPairPopup(popupFromDate, popupFromDateText, btnPopupFromCalendar);
+setupDateInputPairPopup(popupToDate, popupToDateText, btnPopupToCalendar);
+if (popupFromDate) popupFromDate.addEventListener("change", updateAffiliateSummaryMetrics);
+if (popupToDate) popupToDate.addEventListener("change", updateAffiliateSummaryMetrics);
 
 popupExportExcel.addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("tax_report.html") });

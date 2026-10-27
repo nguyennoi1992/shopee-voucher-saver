@@ -18,41 +18,44 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
     3. Người dùng chủ động yêu cầu làm mới bằng cách bấm nút **“🔄 Làm mới từ Shopee”**.
   * Giúp mở trang báo cáo tức thì, không làm quá tải endpoint của Shopee và không lo bị rate limit.
   * Cung cấp nút **“🗑️ Xóa cache”** để dọn dẹp bộ nhớ đệm bất cứ lúc nào.
-* **Lọc theo khoảng thời gian tùy chọn**:
-  * Cho phép chọn **Từ tháng** (ví dụ `2026-01`) đến **Đến tháng** (ví dụ `2026-10`).
-  * Tự động cập nhật bảng tổng hợp và bảng chi tiết theo ngày theo phạm vi đã chọn.
+* **Lọc theo khoảng ngày tùy chọn (Từ ngày - Đến ngày) & Định dạng ngày DD/MM/YYYY chuẩn hóa**:
+  * **Định dạng hiển thị DD/MM/YYYY đảm bảo**: Giao diện cung cấp ô nhập văn bản định dạng `dd/mm/yyyy` trực quan (bảo đảm định dạng ngày hiển thị bất biến ngay cả trên trình duyệt Chromium với locale mặc định `en-US`), đồng bộ hai chiều với các thẻ nhập chuẩn ISO ẩn (`input-from-date`, `input-to-date`, `popup-from-date`, `popup-to-date`).
+  * **Nút mở lịch tự nhiên**: Nút biểu tượng lịch chuyên dụng kích hoạt API chọn ngày gốc của trình duyệt (`.showPicker()` với cơ chế fallback) kèm thông báo phản hồi trợ năng khi khoảng ngày không hợp lệ. Khi nhập sai định dạng hoặc ngày không hợp lệ, hệ thống báo lỗi rõ ràng và hủy ngay lập tức các nút xuất file để ngăn chặn xuất dữ liệu cũ.
+  * **Định dạng nhãn tháng MM/YYYY**: Toàn bộ nhãn tháng hiển thị người dùng (tiêu đề bảng kê ngày, dòng tháng, huy hiệu trạng thái) đều dùng chuẩn `MM/YYYY` (ví dụ `Tháng 10/2026`).
+  * **Thẩm quyền nguồn lịch Billing (Calendar Known Billing Month)**: Khi một tháng đã có dữ liệu Billing gốc trong cache nhưng không có dòng đơn hoàn thành nào rơi vào khoảng ngày lọc chi tiết, hệ thống ghi nhận các ngày được chọn có doanh thu 0 đ thay vì báo thiếu nguồn toàn bộ tháng. Nếu tháng hoàn toàn vắng bóng dữ liệu Billing trong cache, cảnh báo thiếu nguồn vẫn được duy trì nghiêm ngặt.
+  * Tự động khởi tạo mặc định từ ngày đầu tiên đến ngày cuối cùng của tháng hiện tại theo GMT+7 (kể cả khi chưa có dữ liệu cache).
+  * Lọc chặt chẽ: Doanh thu hoàn thành đơn (Billing) được lọc theo ngày hoàn thành; kỳ chi trả (Payout) được lọc theo ngày tạo/ngày tiền về TRƯỚC khi tổng hợp. Bảng kê theo ngày và file xuất CSV/Excel chỉ bao gồm các ngày trong khoảng đã chọn.
 * **Bảng Sổ tay thuế tổng hợp theo tháng**:
-  * **HH gộp**: Tiền sàn trả chưa trừ phí (`eligible_total_amount_dis`).
+  * **HH gộp**: Tiền sàn trả chưa trừ phí (`eligibleTotalAmount` / `eligible_total_amount_dis`).
   * **Phí MCN**: Phí quản lý mạng lưới nếu có tham gia MCN (`mcn_management_fee_dis`).
   * **Sau MCN**: `HH gộp` - `Phí MCN`.
-  * **Phí DV 0,98%**: Phí dịch vụ sàn Shopee khấu trừ (0.98% của số tiền sau MCN).
-  * **Thực nhận theo bill**: Số tiền thực tế ghi nhận trên bảng kê của Shopee.
-  * **10% TNCN (vãng lai)**: Thuế TNCN khấu trừ tại nguồn đối với cá nhân chưa đăng ký Hộ kinh doanh (10% của Sau MCN).
-  * **5% GTGT & 5% TNCN (KD)**: Nghĩa vụ thuế theo mô hình Hộ kinh doanh (mỗi loại 5% của Sau MCN).
-  * **Ước thực về TK**: Số tiền thực tế về tài khoản ngân hàng sau khi trừ toàn bộ thuế và phí.
-  * **Dòng Cộng**: Tổng lũy kế toàn bộ các cột trong kỳ báo cáo.
+  * **Phí DV (HĐ)**: Phí dịch vụ theo hóa đơn GTGT điện tử chính thức từ `service_fee_invoice`. Áp dụng đè lên cả các tháng có Payout. Khi chưa có HĐ (như tháng hiện tại), hiển thị rõ "Chưa có HĐ" thay vì tính ước lượng 0,98%. Khi chọn khoảng ngày một phần tháng, hiển thị "-" để tránh tính phí tháng dở dang.
+  * **Sau phí HĐ**: `Sau MCN` - `Phí DV (HĐ)`. Khi chưa có hóa đơn hoặc khoảng lọc dở dang, hiển thị "-".
+  * **10% TNCN (ước tính)**: Thuế TNCN vãng lai (áp dụng cho kỳ trước 10/2026 hoặc ước tính).
+  * **5% GTGT & 5% TNCN (ước tính)**: Nghĩa vụ thuế theo mô hình Hộ kinh doanh (áp dụng từ 10/2026).
+  * **Thực nhận (Payout)**: Số tiền thực nhận ghi nhận trên kỳ chi trả Payout của Shopee (không bị thay đổi bởi việc áp hóa đơn phí).
+  * **Dòng Tổng cộng**: Hiển thị tổng lũy kế; nếu có tháng chưa đủ HĐ hoặc khoảng lọc dở dang, cột phí hiển thị "Chưa đủ HĐ" (không tự cộng tháng thiếu bằng 0).
 * **Bảng kê chi tiết doanh thu theo ngày (Mẫu kê khai)**:
   * Trình bày dạng bảng với 3 cột chuẩn:
     * `Ngày tháng` (định dạng đầy đủ `dd/mm/yyyy`, múi giờ GMT+7, ví dụ `01/10/2026`)
     * `Diễn giải` (*"Doanh thu từ Shopee"*)
-    * `Số tiền` (*Doanh thu tiền sàn trả chưa trừ phí theo ngày hoàn thành đơn*)
-  * Từng tháng có dòng tiêu đề `Tháng mm/yyyy` (ví dụ `Tháng 10/2026 (2026-10) - Doanh thu theo ngày hoàn thành đơn`) và dòng tổng kết `Tổng Doanh Thu` in đậm cộng dồn chính xác doanh thu billing thực tế của tháng.
-  * Hiển thị thông báo trực quan khi tháng chỉ có dữ liệu Payout mà thiếu dữ liệu billing theo ngày (không tự bịa đặt doanh thu hay tạo lịch 31 ngày bằng 0 giả lập).
+    * `Số tiền` (*Doanh thu tiền sàn trả chưa trừ phí theo ngày hoàn thành đơn trong khoảng lọc*)
+  * Từng tháng có dòng tiêu đề `Tháng mm/yyyy` và dòng tổng kết `Tổng Doanh Thu` in đậm cộng dồn chính xác doanh thu billing thực tế của các ngày được chọn.
+  * Hiển thị thông báo trực quan khi tháng chỉ có dữ liệu Payout mà thiếu dữ liệu billing theo ngày.
 * **Xuất Sổ doanh thu bán hàng hóa, dịch vụ (Mẫu S1a-HKD - Thông tư 152/2025/TT-BTC)**:
-  * Chuẩn hóa theo biểu mẫu chính thức ban hành tại Phụ lục Thông tư số **152/2025/TT-BTC** ngày 31/12/2025 của Bộ trưởng Bộ Tài chính (có hiệu lực từ ngày **01/01/2026**; nguồn xác thực: [Cổng TTĐT Chính phủ](https://vanban.chinhphu.vn/?pageid=27160&docid=216533)).
-  * Trình bày văn bản hành chính kế toán đầy đủ:
-    * Tiêu ngữ góc trái: *HỘ, CÁ NHÂN KINH DOANH*, *Địa chỉ*, *Mã số thuế*.
-    * Ký hiệu góc phải: *Mẫu số S1a-HKD (Kèm theo Thông tư số 152/2025/TT-BTC ngày 31 tháng 12 năm 2025 của Bộ trưởng Bộ Tài chính)*.
-    * Tiêu đề chính giữa: **SỔ DOANH THU BÁN HÀNG HÓA, DỊCH VỤ**, *Địa điểm kinh doanh* (mặc định: `Kinh doanh trên nền tảng số (Shopee Affiliate)`), *Kỳ kê khai* (`Từ ngày 01/MM/YYYY đến ngày DD/MM/YYYY`), *Đơn vị tính: đồng*.
-    * Bảng 3 cột chuẩn: Cột A (*Ngày tháng*), Cột B (*Diễn giải*), Cột 1 (*Số tiền*); dòng *Tổng cộng*.
-    * Chân sổ góc phải: Ngày tháng năm, chức danh *NGƯỜI ĐẠI DIỆN HỘ KINH DOANH / CÁ NHÂN KINH DOANH (Ký, ghi rõ họ tên, đóng dấu (nếu có))*.
+  * Chuẩn hóa theo biểu mẫu chính thức ban hành tại Phụ lục Thông tư số **152/2025/TT-BTC** ngày 31/12/2025 của Bộ trưởng Bộ Tài chính (có hiệu lực từ ngày **01/01/2026**).
+  * Bảng 3 cột chuẩn biểu mẫu: Cột A (*Ngày, tháng*), Cột B (*Diễn giải*), Cột 1 (*Số tiền*); dòng *Tổng cộng*.
+  * Hỗ trợ xuất trực tiếp cả **3 định dạng cùng chung mô hình sổ sách đã kiểm chứng**:
+    1. **Xuất Excel thật (.xlsx)**: File OOXML ZIP package chuẩn Microsoft Excel, định dạng số `#,##0`, căn chỉnh viền, tiêu đề in đậm.
+    2. **Xuất Word thật (.docx)**: File OOXML ZIP package chuẩn Microsoft Word A4, phông chữ Times New Roman, lặp lại tiêu đề bảng ở mỗi trang (`<w:tblHeader/>`), chống cắt ngang dòng (`<w:cantSplit/>`), khối ký tên đại diện hộ kinh doanh.
+    3. **In / Lưu PDF**: Sử dụng CSS in ấn `@media print` và hộp thoại `window.print()` chuẩn trình duyệt.
+  * Sinh file thuần trình duyệt thông qua module `s1a_export.js` (tính toán mã kiểm tra CRC-32 và đóng gói ZIP Stored trực tiếp bằng chuẩn JavaScript/TextEncoder/Uint8Array, không tải thư viện ngoài, không gửi dữ liệu ra khỏi thiết bị).
   * Căn cứ số liệu chính thức:
     * **Kỳ chi trả Payout Record (Chính thức)**: Lấy hoa hồng gộp (`eligibleTotalAmount`) từ [Shopee Affiliate Payout Record](https://affiliate.shopee.vn/payment/payout_record) TRƯỚC mọi khoản giảm trừ: không trừ phí quản lý MCN, không trừ phí dịch vụ Shopee, không khấu trừ thuế GTGT hay TNCN. Số liệu hoàn toàn độc lập với chế độ tính thuế cá nhân hay hộ kinh doanh. Thời điểm ghi nhận: ngày tạo kỳ chi trả (`payoutCreatedTime`), fallback sang ngày tiền về (`payArrivalTime`) chỉ khi thiếu `payoutCreatedTime`.
   * Tùy chọn phương pháp ghi sổ: Ghi tổng định kỳ ngày cuối tháng (mặc định) hoặc ghi chi tiết theo từng kỳ chi trả phát sinh.
-  * Cơ chế bảo vệ dữ liệu nghiêm ngặt: Liệt kê đầy đủ từng tháng theo lịch giữa các điểm mút chọn, phát hiện và chặn các khoảng trống lịch (calendar gaps); chống nhân đôi số tiền khi trùng lặp `payoutId` và phát hiện xung đột trùng ID khác số tiền; bảo lưu số 0 hợp lệ nếu có kỳ chi trả 0 đ; chặn in nếu dữ liệu không hợp lệ.
-  * In và Lưu PDF chuẩn A4 tích hợp sẵn: Sử dụng CSS `@media print` và lệnh `window.print()` của trình duyệt, lặp lại tiêu đề cột ở mỗi trang (`thead` có `display: table-header-group`), chân bảng `tfoot` hiển thị dòng Tổng cộng duy nhất một lần ở cuối bảng (`display: table-row-group`), chống cắt xén chữ ký/thông tin định danh dài, chặn in nếu phát hiện lỗi hoặc dữ liệu không hợp lệ.
+  * Cơ chế bảo vệ dữ liệu nghiêm ngặt: Liệt kê đầy đủ từng tháng theo lịch giữa các điểm mút chọn, phát hiện và chặn các khoảng trống lịch (calendar gaps); chống nhân đôi số tiền khi trùng lặp `payoutId` và phát hiện xung đột trùng ID khác số tiền; bảo lưu số 0 hợp lệ nếu có kỳ chi trả 0 đ; chặn xuất file và in nếu dữ liệu không hợp lệ.
   * Lưu trữ thông tin định danh cục bộ: Toàn bộ thông tin Họ tên, Địa chỉ, Mã số thuế, Địa điểm kinh doanh được lưu riêng trên trình duyệt qua `chrome.storage.local` (khóa `shopee_affiliate_s1a_profile`), không truyền qua mạng, an toàn tuyệt đối và tự động điền lại khi mở trang.
-* **Xuất file Excel (.xls) và CSV (.csv)**:
+* **Xuất file Bảng kê doanh thu Excel (.xls) và CSV (.csv)**:
   * **File Excel (.xls)**: Định dạng chuẩn SpreadsheetML với đường viền (borders), tiêu đề in đậm, cột ngày dạng String `dd/mm/yyyy`, định dạng số có dấu phân cách hàng nghìn (`#,##0`).
   * **File CSV (.csv)**: Chuẩn UTF-8 có BOM (`\uFEFF`) với cột ngày `dd/mm/yyyy`, mở trực tiếp trên Microsoft Excel và Google Sheets không bị lỗi font tiếng Việt.
   * Tự động ngăn chặn xuất file nếu bất kỳ tháng nào trong khoảng được chọn thiếu dữ liệu billing theo ngày để tránh tạo ra file thiếu dữ liệu hoặc gây hiểu nhầm.
@@ -149,6 +152,10 @@ Phân hệ **Sổ tay thuế & Doanh thu Shopee Affiliate** hỗ trợ các Publ
 
 ### 3.3. Cơ chế Hóa đơn phí dịch vụ (service_fee_invoice) & Đối soát thanh toán
 
+> [!NOTE]
+> Để xem chi tiết các mẫu payload thực tế từ Shopee Affiliate API (GraphQL Payout, Billing List REST, Service Fee Invoice GraphQL/REST) cùng quy tắc thang tỷ lệ tiền tệ (`x100000` vs `_dis`), vui lòng tham khảo tài liệu [docs/SHOPEE_RESPONSE_CONTRACTS.md](SHOPEE_RESPONSE_CONTRACTS.md).
+> Để xem so sánh kiến trúc đối soát thanh toán và tham chiếu sổ S1a ngoại tuyến, vui lòng xem tài liệu [docs/REA_PAYMENT_HISTORY_REFERENCE.md](REA_PAYMENT_HISTORY_REFERENCE.md).
+
 Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee lưu trữ các **Hóa đơn điện tử GTGT (e-Invoice)** phát hành cho Publisher.
 
 1. **Nguồn API GraphQL chính thức của portal**:
@@ -192,14 +199,24 @@ Trang `https://affiliate.shopee.vn/payment/service_fee_invoice` là nơi Shopee 
 | **09/2026** | **4.499 đ** | HĐ `7581980` | Hợp lệ | 459.292 đ (Net: 454.793 đ) |
 | **TỔNG CỘNG** | **59.486 đ** | **9 hóa đơn điện tử** | **Hợp lệ** | **6.070.049 đ (Net: 6.010.563 đ)** |
 
-3. **Nguyên tắc phân định rõ ràng giữa Hóa đơn phí dịch vụ và Payout Record**:
-   * **Khác biệt về bản chất và chu kỳ**:
-     * `service_fee_invoice` xác định chu kỳ tính phí theo mốc thời gian hoàn thành thanh toán kỳ đối soát (`paymentCompletePeriodStartTime`).
-     * `payout_record` được ghi nhận theo **thời điểm chi trả tiền mặt thực tế** (`payoutCreatedTime` / `payArrivalTime`).
-   * **Bất biến không ghi đè (No Overwrite Invariant)**: Hóa đơn phí dịch vụ từ `service_fee_invoice` **chỉ được áp dụng cho các tháng hạch toán theo billing** (`!hasPayout`). Tuyệt đối **không được ghi đè** lên phí, doanh thu hợp lệ hay thực nhận của các tháng đã có Payout Record thực tế (ví dụ: một kỳ thanh toán tháng 10 có thực nhận 63.906 đ và phí 704 đ sẽ không bị hóa đơn tháng 10 thay đổi thực nhận).
-   * **Cơ chế chọn nguồn dữ liệu kép (Dual-track)**:
-     * Trước tháng 10/2026: Ưu tiên `billing_list` kết hợp `service_fee_invoice`; nếu thiếu billing thì tự động fallback về `payout_record`.
-     * Từ tháng 10/2026 trở đi: Ưu tiên `payout_record` (chuẩn từng bill tiền mặt); nếu tháng nào chưa có Payout thì tự động fallback về `billing_list`.
+3. **Nguyên tắc phân định và hợp nhất Hóa đơn phí dịch vụ (service_fee_invoice)**:
+   * **Xác định kỳ dịch vụ (Service Period Contract)**:
+     * Kỳ dịch vụ của hóa đơn được xác định bởi mốc thời gian hoàn thành thanh toán kỳ đối soát (`paymentCompletePeriodStartTime` / `paymentCompletePeriodEndTime`) hoặc `monthKey` rõ ràng, **TUYỆT ĐỐI KHÔNG** căn cứ vào ngày phát hành hay ngày thanh toán và không trừ lùi 1 tháng mù quáng.
+     * Ví dụ: Hóa đơn phát hành đầu tháng 11 nhưng có kỳ dịch vụ hoàn thành trong tháng 10 (`paymentCompletePeriodStartTime` thuộc tháng 10) sẽ được hạch toán chuẩn xác vào chi phí dịch vụ tháng 10.
+   * **Hiệu lực pháp lý cao nhất (Authoritative Invoice Override)**:
+     * Hóa đơn điện tử GTGT từ `service_fee_invoice` có giá trị pháp lý chính thức cao nhất cho toàn bộ tháng được chọn, áp dụng đè lên số phí dịch vụ ước lượng/suy luận cho **MỌI tháng có hóa đơn**, kể cả tháng đã có Payout Record (`hasPayout`).
+     * Ví dụ: Tháng 03/2026 có hóa đơn điện tử 9.767 đ sẽ ghi nhận đúng 9.767 đ vào cột "Phí DV (HĐ)", thay vì giữ số suy luận 11.126 đ.
+   * **Bảo toàn tính độc lập của Gross và Thực nhận Payout**:
+     * Việc áp dụng hóa đơn phí dịch vụ **TUYỆT ĐỐI KHÔNG** tính toán lại số Thực nhận quan sát được (`netPaid` / `totalPaymentAmount`) từ Payout Record, và không tự tạo chênh lệch thuế giả định.
+     * Cột "Sau phí HĐ" phản ánh `Sau MCN - Phí DV (HĐ)`; trong khi cột "Thực nhận (Payout)" phản ánh chính xác dòng tiền thực tế giải ngân về tài khoản.
+   * **Hóa đơn 0 đ là hợp lệ**:
+     * Hóa đơn phát hành có tổng phí dịch vụ bằng 0 đ (`totalServiceFee = 0`) là hợp lệ và được ghi nhận là 0 đ, không bị coi là thiếu dữ liệu.
+   * **Xử lý tháng chưa có hóa đơn (Missing Invoices)**:
+     * Tháng chưa có hóa đơn phát hành (ví dụ tháng 10 hiện tại) hiển thị rõ trạng thái `"Chưa có HĐ"` (`null`), không hiển thị 0 đ và không tự ý suy luận phí 0,98%.
+   * **Xử lý khoảng ngày lọc một phần tháng (Partial Month Range)**:
+     * Khi người dùng lọc khoảng ngày lẻ (không bao trọn vẹn từ ngày 01 đến ngày cuối cùng của tháng, ví dụ từ 10/09 đến 20/09), hệ thống **TUYỆT ĐỐI KHÔNG** chia tỷ lệ (prorate) hay khấu trừ phí của cả tháng vào doanh thu một phần ngày.
+     * Cột "Phí DV (HĐ)" và "Sau phí HĐ" cho tháng bị lọc dở dang hiển thị `"-"` kèm ghi chú giải thích cần chọn đủ tháng để tính phí HĐ. Doanh thu Gross và Thực nhận Payout trong phạm vi ngày chọn vẫn hiển thị và sử dụng bình thường.
+     * Chân bảng (Totals) khi có tháng thiếu hóa đơn hoặc lọc một phần tháng sẽ hiển thị `"Chưa đủ HĐ"`, tuyệt đối không cộng tháng chưa rõ bằng 0.
    * **Hành vi nạp / dán dữ liệu thủ công (Manual Import & Cache Preservation)**:
      * Khi dán bổ sung một tập con HĐ phí DV (ví dụ chỉ dán HĐ tháng 9), hệ thống chỉ cập nhật tháng 9 và **bảo toàn nguyên vẹn** các tháng HĐ đã lưu trước đó trong cache.
      * Khi dán danh sách hỗn hợp (vừa có HĐ phí vừa có Billing/Payout), phần doanh thu mới sẽ thay thế toàn bộ doanh thu cũ (tránh nhân đôi doanh thu khi dán lặp lại), trong khi các tháng HĐ chưa có trong lần dán này vẫn được giữ nguyên.
@@ -318,19 +335,44 @@ Căn cứ Thông tư số **152/2025/TT-BTC** ngày 31/12/2025 của Bộ trư�
    * **Ghi tổng theo tháng (Mặc định)**: Cột A ghi ngày cuối cùng của tháng (`dd/mm/yyyy`), Cột B ghi `Tổng doanh thu tháng mm/yyyy (gộp N dòng sổ)`, Cột 1 ghi tổng số tiền trong tháng. Dòng *Tổng cộng* bằng tổng lũy kế các tháng.
    * **Ghi chi tiết theo từng kỳ chi trả**: Liệt kê từng kỳ thanh toán theo thứ tự thời gian (`dd/mm/yyyy`), ghi rõ `Doanh thu Shopee Affiliate (Kỳ {payoutId} - ngày tạo kỳ chi trả)`. Tổng cộng của cách ghi chi tiết luôn khớp chính xác 100% với tổng cộng của cách ghi theo tháng.
 
-5. **Hướng dẫn In & Xuất file PDF (Save as PDF)**:
-   * Bước 1: Mở trang Sổ tay thuế `tax_report.html`, chọn khoảng tháng cần lập sổ (ví dụ: `2026-01` đến `2026-10`).
+5. **Hộp thoại Đối chiếu kỳ Payout (Read-only) & Minh chứng trường hợp 38.230 đ (`DEMO_PAYOUT_0005`)**:
+   * **Đối chiếu trực tiếp từ S1a**: Tích hợp nút bấm **"🔍 Đối chiếu"** trên từng dòng kỳ Payout và bộ chọn nhanh trên thanh công cụ S1a, mở hộp thoại `<dialog>` gốc độc lập hoàn toàn ở chế độ chỉ đọc.
+   * **Đối soát qua toàn bộ Cache (Whole Cache Join)**: Tự động liên kết các bản ghi Billing hoàn thành đơn thỏa mãn `String(Billing.payout_id).trim() === String(Payout.payoutId).trim()` từ **toàn bộ bộ nhớ đệm cache**, không bị cắt xén hay giới hạn bởi bộ lọc ngày của bảng Billing.
+   * **Minh chứng trường hợp Payout 38.230 đ**:
+     * Kỳ Payout `DEMO_PAYOUT_0005`: Ngày tạo `05/10/2026 02:00:07`, Ngày tiền về `08/10/2026 14:50:33`, HH gộp Payout (API): **38.230 đ**, Thực nhận Payout (API): **34.030 đ**.
+     * Liên kết đầy đủ 4 bản ghi Billing hoàn thành đơn vắt ngang qua ranh giới tháng:
+       - `30/09/2026` (`DEMO_VAL_0006`): Gross 7.002 đ, Giảm trừ 69 đ, Thực nhận Billing 6.933 đ.
+       - `01/10/2026` (`DEMO_VAL_0007`): Gross 9.557 đ, Giảm trừ 94 đ, Thực nhận Billing 9.463 đ.
+       - `02/10/2026` (`DEMO_VAL_0008`): Gross 19.671 đ, Giảm trừ 193 đ, Thực nhận Billing 19.478 đ.
+       - `03/10/2026` (`DEMO_VAL_0004`): Gross 2.000 đ, Giảm trừ 20 đ, Thực nhận Billing 1.980 đ.
+     * **Tổng hợp đối soát tài chính**:
+       - Tổng HH gộp Billing: $7.002 + 9.557 + 19.671 + 2.000 = \mathbf{38.230 \text{ đ}}$ (khớp chính xác 100% với Payout Gross).
+       - Tổng thực nhận Billing: $6.933 + 9.463 + 19.478 + 1.980 = \mathbf{37.854 \text{ đ}}$.
+       - Giảm trừ tại Billing: $38.230 - 37.854 = \mathbf{376 \text{ đ}}$ (tổng làm tròn từng ngày $69 + 94 + 193 + 20$, khác 1 đ so với làm tròn 1 lần $38.230 \times 0.98\% = 375 \text{ đ}$).
+       - Chênh lệch lúc chi trả: $37.854 - 34.030 = \mathbf{3.824 \text{ đ}}$ (khớp chính xác ảnh chụp đối soát thuế: $2 \times \text{round}(5\% \times 38.230) = 1.912 + 1.912 = 3.824 \text{ đ}$, trong khi $10\%$ của $38.230$ là $3.823 \text{ đ}$; API không trả trường thuế chi tiết, hệ thống chỉ hiển thị số chênh lệch quan sát được, không bịa đặt cấu trúc thuế giả mạo).
+     * **Bảo vệ số liệu S1a**: Nếu thiếu dữ liệu Billing hoặc tổng Gross không khớp, hộp thoại hiển thị cảnh báo độ bao phủ rõ ràng nhưng **tuyệt đối không ghi đè số Gross 38.230 đ** của S1a. Nút đối chiếu và hộp thoại mang class `.no-print`, không tạo thêm cột thứ 4 vào biểu mẫu in ấn S1a và không làm thay đổi các file xuất OOXML (.xlsx, .docx) hay PDF.
+
+6. **Hướng dẫn Xuất file Excel (.xlsx), Word (.docx) và In/Lưu PDF**:
+   * Bước 1: Mở trang Sổ tay thuế `tax_report.html`, chọn khoảng ngày cần lập sổ (Từ ngày - Đến ngày).
    * Bước 2: Chuyển sang tab **“📑 Sổ S1a-HKD (TT 152/2025/TT-BTC)”**.
    * Bước 3: Điền các thông tin: Họ tên, Địa chỉ, Mã số thuế (để trống nếu tự điền khi ký tay); Địa điểm kinh doanh (mặc định: `Kinh doanh trên nền tảng số (Shopee Affiliate)`). Bấm **“💾 Lưu thông tin”** để lưu vào `chrome.storage.local` (chỉ lưu trên máy cá nhân, không gửi qua Internet).
-   * Bước 4: Chọn Phương pháp ghi sổ (Tổng theo tháng hoặc Chi tiết theo kỳ).
-   * Bước 5: Bấm nút **“🖨️ In / Lưu PDF”**. Trình duyệt sẽ mở hộp thoại In:
-     * Mục *Máy in đích (Destination)*: Chọn **Lưu dưới dạng PDF (Save as PDF)**.
-     * Khổ giấy: **A4**.
-     * Hướng giấy: **Dọc (Portrait)**.
-     * Tùy chọn in: Bỏ chọn **"Tiêu đề đầu trang và chân trang" (disable Headers and Footers)** để bản in / file PDF sạch sẽ, không bị dính URL hay ngày in của trình duyệt.
-     * Bấm **Lưu (Save)** để tải file PDF hoàn chỉnh. Toàn bộ thanh công cụ, nút bấm và cảnh báo sẽ tự động ẩn đi; tiêu đề bảng tự động lặp lại ở đầu trang sau (`thead`), dòng Tổng cộng chỉ xuất hiện duy nhất một lần ở cuối bảng (`tfoot` dạng `table-row-group`), và tự động chặn in nếu dữ liệu không hợp lệ.
+   * Bước 4: Chọn Phương pháp ghi sổ (Tổng theo tháng hoặc Chi tiết theo kỳ chi trả).
+   * Bước 5: Bấm nút xuất tương ứng:
+     * **📊 Xuất Excel (.xlsx)**: Tải file `.xlsx` thật theo định dạng OOXML ZIP package, mở ngay trên Microsoft Excel / LibreOffice Calc với công thức số nguyên, viền kẻ và tiêu đề căn chỉnh hoàn chỉnh.
+     * **📄 Xuất Word (.docx)**: Tải file `.docx` thật theo định dạng OOXML ZIP package, mở trên Microsoft Word / LibreOffice Writer chuẩn khổ giấy A4 dọc, phông chữ Times New Roman, lặp lại dòng tiêu đề bảng ở mỗi trang (`<w:tblHeader/>`), chống cắt xén dòng (`<w:cantSplit/>`), dòng chữ ký kế toán chuẩn xác.
+     * **🖨️ In / Lưu PDF**: Trình duyệt sẽ mở hộp thoại In:
+       * Mục *Máy in đích (Destination)*: Chọn **Lưu dưới dạng PDF (Save as PDF)**.
+       * Khổ giấy: **A4**, hướng **Dọc (Portrait)**.
+       * Bỏ chọn **"Tiêu đề đầu trang và chân trang"**.
+       * Bấm **Lưu (Save)** để có bản in PDF sạch đẹp.
 
-6. **Giới hạn trách nhiệm & Pháp lý**:
+7. **Ghi chú khảo sát tham chiếu công khai (addlivetag static REA)**:
+   * Dựa trên khảo sát tham chiếu công khai (addlivetag static REA evidence `ev_5bc1ce1e` `/tmp/shopee-s1a-reference`):
+   * Trang tham chiếu công khai hoàn toàn tĩnh và không phơi bày cấu trúc nội bộ của tài khoản Shopee Affiliate; không can thiệp vào tài khoản Shopee nội bộ; không sao chép mã nguồn bên thứ ba; tuyệt đối không gửi cookie, token hay dữ liệu tài chính ra ngoài thiết bị.
+   * Tùy chọn 'sau MCN' ở trang tham chiếu không được đè lên nguyên tắc cơ sở: Sổ S1a-HKD căn cứ trên Hoa hồng gộp (Gross `eligibleTotalAmount`) trước mọi khoản phí và thuế, theo đúng xác nhận chính thức của người dùng.
+   * Không tự ý áp đặt các ngưỡng hay quy định pháp lý chưa được kiểm chứng; tuân thủ trung thực biểu mẫu chính thức TT 152/2025/TT-BTC.
+
+8. **Giới hạn trách nhiệm & Pháp lý**:
    * Nguồn số liệu chỉ tổng hợp và đối soát từ hệ thống Shopee Affiliate Việt Nam.
    * Extension không có chức năng tự động nộp hồ sơ thuế điện tử tới Tổng cục Thuế. Người nộp thuế chịu trách nhiệm tự kiểm tra, đối chiếu số liệu và nộp hồ sơ kê khai theo đúng quy định hiện hành.
 

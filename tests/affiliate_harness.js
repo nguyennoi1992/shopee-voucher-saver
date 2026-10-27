@@ -48,6 +48,10 @@ function createMockElement(id = '', tagName = 'div') {
       }
     },
     setAttribute() {},
+    focus() { this._focused = true; },
+    showPicker() { this._showPickerCalled = true; },
+    showModal() { this._open = true; },
+    close() { this._open = false; if (typeof this.onclose === 'function') this.onclose(); },
     querySelectorAll() { return []; },
     querySelector() { return null; }
   };
