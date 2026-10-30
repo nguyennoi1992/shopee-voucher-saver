@@ -1,0 +1,6 @@
+simulation: shopee-affiliate
+routing: path
+mocks:
+  - name: shopee-affiliate
+    routeKey: shopee
+    path: postman/mocks/shopee-affiliate/config.yaml

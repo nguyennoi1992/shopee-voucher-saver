@@ -1,0 +1,378 @@
+{
+  "data": {
+    "getPaymentPayoutBillingList": {
+      "payoutList": [
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "2560300000",
+            "payoutCreatedTime": "1792954806",
+            "payoutId": "DEMO_PAYOUT_0001",
+            "totalPaymentAmount": "2279300000",
+            "payoutPaymentStatus": 1,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "0",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "7179000000",
+            "payoutCreatedTime": "1792350007",
+            "payoutId": "DEMO_PAYOUT_0002",
+            "totalPaymentAmount": "6390600000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1792644787",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "2372100000",
+            "payoutCreatedTime": "1791745206",
+            "payoutId": "DEMO_PAYOUT_0003",
+            "totalPaymentAmount": "2111700000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1792042381",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "4998500000",
+            "payoutCreatedTime": "1791399640",
+            "payoutId": "DEMO_PAYOUT_0004",
+            "totalPaymentAmount": "4449800000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1791864518",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "3823000000",
+            "payoutCreatedTime": "1791140407",
+            "payoutId": "DEMO_PAYOUT_0005",
+            "totalPaymentAmount": "3403000000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1791445833",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "2356200000",
+            "payoutCreatedTime": "1790794806",
+            "payoutId": "DEMO_PAYOUT_0006",
+            "totalPaymentAmount": "2333100000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1791266960",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "2778400000",
+            "payoutCreatedTime": "1790535607",
+            "payoutId": "DEMO_PAYOUT_0007",
+            "totalPaymentAmount": "2751200000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1790830836",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "2160900000",
+            "payoutCreatedTime": "1790190010",
+            "payoutId": "DEMO_PAYOUT_0008",
+            "totalPaymentAmount": "2139700000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1790662693",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "2803800000",
+            "payoutCreatedTime": "1789930808",
+            "payoutId": "DEMO_PAYOUT_0009",
+            "totalPaymentAmount": "2776400000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1790228752",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        },
+        {
+          "payoutDisplayVersion": 0,
+          "paymentPayout": {
+            "accountType": 3,
+            "eligibleTotalAmount": "16451800000",
+            "payoutCreatedTime": "1789585207",
+            "payoutId": "DEMO_PAYOUT_0010",
+            "totalPaymentAmount": "16290500000",
+            "payoutPaymentStatus": 10,
+            "paidFailedReasonType": 601,
+            "payArrivalTime": "1790047915",
+            "transferredToOffline": 1,
+            "cancelReason": "",
+            "cancelType": 0,
+            "closeReason": ""
+          },
+          "payoutInvoice": [],
+          "payoutExternalInfo": {
+            "mergeInvoiceStatus": 0,
+            "serviceFeeInvoiceStatus": 0
+          }
+        }
+      ],
+      "payoutTotalAmount": "869732700000",
+      "payoutBreakdown": {
+        "totalPaymentAmount": "0",
+        "totalPaymentAmountDis": "0",
+        "socialMediasCommission": "0",
+        "socialMediasCommissionDis": "0",
+        "socialMedias": {
+          "bonusCommission": {
+            "bonusComm": "0",
+            "bonusCommDis": "0",
+            "bonusType": []
+          },
+          "mcnManagementFee": {
+            "mcnManagementFee": "0",
+            "mcnManagementFeeDis": "0"
+          },
+          "pppCommission": {
+            "pppComm": "0",
+            "pppCommDis": "0"
+          },
+          "sellerCommission": {
+            "sellerComm": "0",
+            "sellerCommConversion": "0",
+            "sellerCommDis": "0",
+            "sellerCommDiscovery": "0",
+            "sellerCommNormal": "0"
+          },
+          "serviceFee": {
+            "serviceFee": "0",
+            "serviceFeeDis": "0"
+          },
+          "shopeeCommission": {
+            "orderedInDifferentShop": "0",
+            "orderedInDifferentShopDis": "0",
+            "orderedInSameShop": "0",
+            "orderedInSameShopDis": "0",
+            "shopeeComm": "0",
+            "shopeeCommConversion": "0",
+            "shopeeCommDis": "0",
+            "shopeeCommDiscovery": "0"
+          },
+          "sellerCommissionAdjustment": {
+            "sellerCommAdjustment": "0",
+            "channelDetails": []
+          },
+          "shopeeCommissionAdjustment": {
+            "shopeeCommAdjustment": "0",
+            "channelDetails": []
+          }
+        },
+        "shopeeLiveCommission": "0",
+        "shopeeLiveCommissionDis": "0",
+        "shopeeLive": {
+          "bonusCommission": {
+            "bonusComm": "0",
+            "bonusCommDis": "0",
+            "bonusType": []
+          },
+          "mcnManagementFee": {
+            "mcnManagementFee": "0",
+            "mcnManagementFeeDis": "0"
+          },
+          "pppCommission": {
+            "pppComm": "0",
+            "pppCommDis": ""
+          },
+          "sellerCommission": {
+            "sellerComm": "0",
+            "sellerCommConversion": "0",
+            "sellerCommDis": "0",
+            "sellerCommDiscovery": "0",
+            "sellerCommNormal": "0"
+          },
+          "serviceFee": {
+            "serviceFee": "0",
+            "serviceFeeDis": "0"
+          },
+          "shopeeCommission": {
+            "orderedInDifferentShop": "0",
+            "orderedInDifferentShopDis": "0",
+            "orderedInSameShop": "0",
+            "orderedInSameShopDis": "0",
+            "shopeeComm": "0",
+            "shopeeCommConversion": "0",
+            "shopeeCommDis": "0",
+            "shopeeCommDiscovery": "0"
+          },
+          "sellerCommissionAdjustment": {
+            "sellerCommAdjustment": "0",
+            "channelDetails": []
+          },
+          "shopeeCommissionAdjustment": {
+            "shopeeCommAdjustment": "0",
+            "channelDetails": []
+          }
+        },
+        "shopeeVideoCommission": "0",
+        "shopeeVideoCommissionDis": "0",
+        "shopeeVideo": {
+          "bonusCommission": {
+            "bonusComm": "0",
+            "bonusCommDis": "0",
+            "bonusType": []
+          },
+          "mcnManagementFee": {
+            "mcnManagementFee": "0",
+            "mcnManagementFeeDis": "0"
+          },
+          "pppCommission": {
+            "pppComm": "0",
+            "pppCommDis": ""
+          },
+          "sellerCommission": {
+            "sellerComm": "0",
+            "sellerCommConversion": "0",
+            "sellerCommDis": "0",
+            "sellerCommDiscovery": "0",
+            "sellerCommNormal": "0"
+          },
+          "serviceFee": {
+            "serviceFee": "0",
+            "serviceFeeDis": "0"
+          },
+          "shopeeCommission": {
+            "orderedInDifferentShop": "0",
+            "orderedInDifferentShopDis": "0",
+            "orderedInSameShop": "0",
+            "orderedInSameShopDis": "0",
+            "shopeeComm": "0",
+            "shopeeCommConversion": "0",
+            "shopeeCommDis": "0",
+            "shopeeCommDiscovery": "0"
+          },
+          "sellerCommissionAdjustment": {
+            "sellerCommAdjustment": "0",
+            "channelDetails": []
+          },
+          "shopeeCommissionAdjustment": {
+            "shopeeCommAdjustment": "0",
+            "channelDetails": []
+          }
+        },
+        "serviceFee": "0",
+        "serviceFeeDis": "0"
+      },
+      "pagination": {
+        "pageNum": 1,
+        "pageSize": 10,
+        "totalCount": "99"
+      }
+    }
+  }
+}

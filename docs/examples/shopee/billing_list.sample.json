@@ -1,0 +1,1139 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "list": [
+      {
+        "bills": [
+          {
+            "validated_brand_commission": 1738600000,
+            "validated_brand_commission_dis": "17386",
+            "eligible_shopee_commission": 0,
+            "eligible_shopee_commission_dis": "0",
+            "eligible_total_commission": 1738600000,
+            "eligible_total_commission_dis": "17386",
+            "order_placed_month": 0,
+            "order_quantity": 2,
+            "wht_amount_dis": "0",
+            "vat_amount_dis": "0",
+            "wht_amount": 0,
+            "vat_amount": 0,
+            "sst_amount_dis": "",
+            "sst_amount": 0,
+            "validation_status": 3,
+            "rejected_reason": "",
+            "receipt_status": 1,
+            "invoice_status": 1,
+            "invoice_dismiss_reason": "",
+            "total_payment_amount": 1738600000,
+            "total_payment_amount_dis": "17386",
+            "bill_type": 1,
+            "bonus_description": "",
+            "brand_taxation_based_amount": 0,
+            "brand_taxation_based_amount_dis": "0",
+            "shopee_taxation_based_amount": 0,
+            "shopee_taxation_based_amount_dis": "0",
+            "total_taxation_based_amount": 0,
+            "total_taxation_based_amount_dis": "0",
+            "payable_commission": 1738600000,
+            "payable_commission_dis": "17386",
+            "history_total_commission_amount": 0,
+            "history_total_commission_amount_dis": "",
+            "eligible_ppp_fee": 0,
+            "eligible_ppp_fee_dis": "",
+            "complete_period_start_time": 0,
+            "complete_period_end_time": 0
+          }
+        ],
+        "payment_shopee_adjustment_list": [],
+        "service_fees": [
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000000,
+                "base_tax_amount": 17038280,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 1239147,
+                "fee_tax_amount_rounded": 1200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0001",
+            "order_placed_month": 0,
+            "bill_source": 7,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 17038280,
+            "service_fee_rounded": 17000000,
+            "pre_tax_service_fee": 18277427,
+            "pre_tax_service_fee_rounded": 18300000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000000,
+                "base_tax_amount": 17038280,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 1239147,
+                "fee_tax_amount_rounded": 1200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0001",
+            "order_placed_month": 0,
+            "bill_source": 6,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 17038280,
+            "service_fee_rounded": 17000000,
+            "pre_tax_service_fee": 18277427,
+            "pre_tax_service_fee_rounded": 18300000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000000,
+                "base_tax_amount": 17038280,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 1239147,
+                "fee_tax_amount_rounded": 1200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0001",
+            "order_placed_month": 0,
+            "bill_source": 5,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 17038280,
+            "service_fee_rounded": 17000000,
+            "pre_tax_service_fee": 18277427,
+            "pre_tax_service_fee_rounded": 18300000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000000,
+                "base_tax_amount": 17038280,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 1239147,
+                "fee_tax_amount_rounded": 1200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0001",
+            "order_placed_month": 0,
+            "bill_source": 2,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 17038280,
+            "service_fee_rounded": 17000000,
+            "pre_tax_service_fee": 18277427,
+            "pre_tax_service_fee_rounded": 18300000
+          }
+        ],
+        "validation_id": "DEMO_VAL_0001",
+        "is_mcn": 0,
+        "with_vat": false,
+        "with_wht": true,
+        "with_sst": false,
+        "validation_month": 202610,
+        "payment_month": 0,
+        "invoice_dismiss_reason": "",
+        "payment_status": 8,
+        "invoice_status": 0,
+        "total_payment_amount": 1721600000,
+        "total_payment_amount_dis": "17216",
+        "account_type": 3,
+        "order_completed_period_start_time": 1792861200,
+        "order_completed_period_end_time": 1792947599,
+        "isoweek": 44,
+        "payment_channel": 0,
+        "payment_rejected_reason": "",
+        "paid_failed_reason_type": 601,
+        "validation_period_start_time": 1792947600,
+        "validation_period_end_time": 1793033999,
+        "overall_validation_status": 3,
+        "payment_file_status": 0,
+        "payment_period_start_time": 0,
+        "payment_period_end_time": 0,
+        "unable_to_pay_detail_status": 0,
+        "transfer_status": 1,
+        "payment_time": 0,
+        "settlement_cycle": 4,
+        "validation_review_time": 1792984618,
+        "payout_id": "",
+        "eligible_total_amount": 1738600000,
+        "eligible_total_amount_dis": "17386",
+        "brand_commission": 1738600000,
+        "brand_commission_dis": "17386",
+        "shopee_commission": 0,
+        "shopee_commission_dis": "0",
+        "bonus_commission": 0,
+        "bonus_commission_dis": "0",
+        "mcn_management_fee": 0,
+        "mcn_management_fee_dis": "0",
+        "validation_payout_status": 1,
+        "payout_created_time": 0,
+        "payment_completed_time": 0,
+        "payment_shopee_adjustment": 0,
+        "service_fee_invoice_status": 0,
+        "service_fee_invoice_dismiss_reason": "",
+        "bill_total_amount": 1721600000,
+        "bill_commission_amount": 1721600000,
+        "bill_ppp_amount": 0,
+        "clawback_shopee_commission": 0,
+        "clawback_seller_commission": 0,
+        "seller_commission_management_fee": 0,
+        "shopee_commission_management_fee": 0
+      },
+      {
+        "bills": [
+          {
+            "validated_brand_commission": 625500000,
+            "validated_brand_commission_dis": "6255",
+            "eligible_shopee_commission": 0,
+            "eligible_shopee_commission_dis": "0",
+            "eligible_total_commission": 625500000,
+            "eligible_total_commission_dis": "6255",
+            "order_placed_month": 0,
+            "order_quantity": 1,
+            "wht_amount_dis": "0",
+            "vat_amount_dis": "0",
+            "wht_amount": 0,
+            "vat_amount": 0,
+            "sst_amount_dis": "",
+            "sst_amount": 0,
+            "validation_status": 3,
+            "rejected_reason": "",
+            "receipt_status": 1,
+            "invoice_status": 1,
+            "invoice_dismiss_reason": "",
+            "total_payment_amount": 625500000,
+            "total_payment_amount_dis": "6255",
+            "bill_type": 1,
+            "bonus_description": "",
+            "brand_taxation_based_amount": 0,
+            "brand_taxation_based_amount_dis": "0",
+            "shopee_taxation_based_amount": 0,
+            "shopee_taxation_based_amount_dis": "0",
+            "total_taxation_based_amount": 0,
+            "total_taxation_based_amount_dis": "0",
+            "payable_commission": 625500000,
+            "payable_commission_dis": "6255",
+            "history_total_commission_amount": 0,
+            "history_total_commission_amount_dis": "",
+            "eligible_ppp_fee": 0,
+            "eligible_ppp_fee_dis": "",
+            "complete_period_start_time": 0,
+            "complete_period_end_time": 0
+          }
+        ],
+        "payment_shopee_adjustment_list": [],
+        "service_fees": [
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000001,
+                "base_tax_amount": 6129900,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 445810,
+                "fee_tax_amount_rounded": 400000
+              }
+            },
+            "validation_id": "DEMO_VAL_0002",
+            "order_placed_month": 0,
+            "bill_source": 7,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 6129900,
+            "service_fee_rounded": 6100000,
+            "pre_tax_service_fee": 6575710,
+            "pre_tax_service_fee_rounded": 6600000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000001,
+                "base_tax_amount": 6129900,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 445810,
+                "fee_tax_amount_rounded": 400000
+              }
+            },
+            "validation_id": "DEMO_VAL_0002",
+            "order_placed_month": 0,
+            "bill_source": 6,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 6129900,
+            "service_fee_rounded": 6100000,
+            "pre_tax_service_fee": 6575710,
+            "pre_tax_service_fee_rounded": 6600000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000001,
+                "base_tax_amount": 6129900,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 445810,
+                "fee_tax_amount_rounded": 400000
+              }
+            },
+            "validation_id": "DEMO_VAL_0002",
+            "order_placed_month": 0,
+            "bill_source": 5,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 6129900,
+            "service_fee_rounded": 6100000,
+            "pre_tax_service_fee": 6575710,
+            "pre_tax_service_fee_rounded": 6600000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000001,
+                "base_tax_amount": 6129900,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 445810,
+                "fee_tax_amount_rounded": 400000
+              }
+            },
+            "validation_id": "DEMO_VAL_0002",
+            "order_placed_month": 0,
+            "bill_source": 2,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 6129900,
+            "service_fee_rounded": 6100000,
+            "pre_tax_service_fee": 6575710,
+            "pre_tax_service_fee_rounded": 6600000
+          }
+        ],
+        "validation_id": "DEMO_VAL_0002",
+        "is_mcn": 0,
+        "with_vat": false,
+        "with_wht": true,
+        "with_sst": false,
+        "validation_month": 202610,
+        "payment_month": 0,
+        "invoice_dismiss_reason": "",
+        "payment_status": 8,
+        "invoice_status": 0,
+        "total_payment_amount": 619400000,
+        "total_payment_amount_dis": "6194",
+        "account_type": 3,
+        "order_completed_period_start_time": 1792774800,
+        "order_completed_period_end_time": 1792861199,
+        "isoweek": 43,
+        "payment_channel": 0,
+        "payment_rejected_reason": "",
+        "paid_failed_reason_type": 601,
+        "validation_period_start_time": 1792861200,
+        "validation_period_end_time": 1792947599,
+        "overall_validation_status": 3,
+        "payment_file_status": 0,
+        "payment_period_start_time": 0,
+        "payment_period_end_time": 0,
+        "unable_to_pay_detail_status": 0,
+        "transfer_status": 1,
+        "payment_time": 0,
+        "settlement_cycle": 4,
+        "validation_review_time": 1792894478,
+        "payout_id": "DEMO_PAYOUT_0001",
+        "eligible_total_amount": 625500000,
+        "eligible_total_amount_dis": "6255",
+        "brand_commission": 625500000,
+        "brand_commission_dis": "6255",
+        "shopee_commission": 0,
+        "shopee_commission_dis": "0",
+        "bonus_commission": 0,
+        "bonus_commission_dis": "0",
+        "mcn_management_fee": 0,
+        "mcn_management_fee_dis": "0",
+        "validation_payout_status": 2,
+        "payout_created_time": 1792954806,
+        "payment_completed_time": 0,
+        "payment_shopee_adjustment": 0,
+        "service_fee_invoice_status": 0,
+        "service_fee_invoice_dismiss_reason": "",
+        "bill_total_amount": 619400000,
+        "bill_commission_amount": 619400000,
+        "bill_ppp_amount": 0,
+        "clawback_shopee_commission": 0,
+        "clawback_seller_commission": 0,
+        "seller_commission_management_fee": 0,
+        "shopee_commission_management_fee": 0
+      },
+      {
+        "bills": [
+          {
+            "validated_brand_commission": 2897800000,
+            "validated_brand_commission_dis": "28978",
+            "eligible_shopee_commission": 1187600000,
+            "eligible_shopee_commission_dis": "11876",
+            "eligible_total_commission": 4085400000,
+            "eligible_total_commission_dis": "40854",
+            "order_placed_month": 0,
+            "order_quantity": 7,
+            "wht_amount_dis": "0",
+            "vat_amount_dis": "0",
+            "wht_amount": 0,
+            "vat_amount": 0,
+            "sst_amount_dis": "",
+            "sst_amount": 0,
+            "validation_status": 3,
+            "rejected_reason": "",
+            "receipt_status": 1,
+            "invoice_status": 1,
+            "invoice_dismiss_reason": "",
+            "total_payment_amount": 4085400000,
+            "total_payment_amount_dis": "40854",
+            "bill_type": 1,
+            "bonus_description": "",
+            "brand_taxation_based_amount": 0,
+            "brand_taxation_based_amount_dis": "0",
+            "shopee_taxation_based_amount": 0,
+            "shopee_taxation_based_amount_dis": "0",
+            "total_taxation_based_amount": 0,
+            "total_taxation_based_amount_dis": "0",
+            "payable_commission": 4085400000,
+            "payable_commission_dis": "40854",
+            "history_total_commission_amount": 0,
+            "history_total_commission_amount_dis": "",
+            "eligible_ppp_fee": 0,
+            "eligible_ppp_fee_dis": "",
+            "complete_period_start_time": 0,
+            "complete_period_end_time": 0
+          }
+        ],
+        "payment_shopee_adjustment_list": [],
+        "service_fees": [
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000012,
+                "base_tax_amount": 40036920,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 2911775,
+                "fee_tax_amount_rounded": 2900000
+              }
+            },
+            "validation_id": "DEMO_VAL_0003",
+            "order_placed_month": 0,
+            "bill_source": 7,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 40036920,
+            "service_fee_rounded": 40000000,
+            "pre_tax_service_fee": 42948695,
+            "pre_tax_service_fee_rounded": 42900000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000012,
+                "base_tax_amount": 40036920,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 2911775,
+                "fee_tax_amount_rounded": 2900000
+              }
+            },
+            "validation_id": "DEMO_VAL_0003",
+            "order_placed_month": 0,
+            "bill_source": 6,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 40036920,
+            "service_fee_rounded": 40000000,
+            "pre_tax_service_fee": 42948695,
+            "pre_tax_service_fee_rounded": 42900000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000012,
+                "base_tax_amount": 40036920,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 2911775,
+                "fee_tax_amount_rounded": 2900000
+              }
+            },
+            "validation_id": "DEMO_VAL_0003",
+            "order_placed_month": 0,
+            "bill_source": 5,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 40036920,
+            "service_fee_rounded": 40000000,
+            "pre_tax_service_fee": 42948695,
+            "pre_tax_service_fee_rounded": 42900000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000012,
+                "base_tax_amount": 28398440,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 2065341,
+                "fee_tax_amount_rounded": 2100000
+              }
+            },
+            "validation_id": "DEMO_VAL_0003",
+            "order_placed_month": 0,
+            "bill_source": 2,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 28398440,
+            "service_fee_rounded": 28400000,
+            "pre_tax_service_fee": 30463781,
+            "pre_tax_service_fee_rounded": 30500000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000012,
+                "base_tax_amount": 11638480,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 846434,
+                "fee_tax_amount_rounded": 800000
+              }
+            },
+            "validation_id": "DEMO_VAL_0003",
+            "order_placed_month": 0,
+            "bill_source": 1,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 11638480,
+            "service_fee_rounded": 11600000,
+            "pre_tax_service_fee": 12484914,
+            "pre_tax_service_fee_rounded": 12500000
+          }
+        ],
+        "validation_id": "DEMO_VAL_0003",
+        "is_mcn": 0,
+        "with_vat": false,
+        "with_wht": true,
+        "with_sst": false,
+        "validation_month": 202610,
+        "payment_month": 0,
+        "invoice_dismiss_reason": "",
+        "payment_status": 8,
+        "invoice_status": 0,
+        "total_payment_amount": 4045400000,
+        "total_payment_amount_dis": "40454",
+        "account_type": 3,
+        "order_completed_period_start_time": 1791219600,
+        "order_completed_period_end_time": 1791305999,
+        "isoweek": 41,
+        "payment_channel": 0,
+        "payment_rejected_reason": "",
+        "paid_failed_reason_type": 601,
+        "validation_period_start_time": 1791306000,
+        "validation_period_end_time": 1791392399,
+        "overall_validation_status": 3,
+        "payment_file_status": 0,
+        "payment_period_start_time": 0,
+        "payment_period_end_time": 0,
+        "unable_to_pay_detail_status": 0,
+        "transfer_status": 1,
+        "payment_time": 0,
+        "settlement_cycle": 4,
+        "validation_review_time": 1791346485,
+        "payout_id": "DEMO_PAYOUT_0004",
+        "eligible_total_amount": 4085400000,
+        "eligible_total_amount_dis": "40854",
+        "brand_commission": 2897800000,
+        "brand_commission_dis": "28978",
+        "shopee_commission": 1187600000,
+        "shopee_commission_dis": "11876",
+        "bonus_commission": 0,
+        "bonus_commission_dis": "0",
+        "mcn_management_fee": 0,
+        "mcn_management_fee_dis": "0",
+        "validation_payout_status": 2,
+        "payout_created_time": 1791399640,
+        "payment_completed_time": 1791864518,
+        "payment_shopee_adjustment": 0,
+        "service_fee_invoice_status": 0,
+        "service_fee_invoice_dismiss_reason": "",
+        "bill_total_amount": 4045400000,
+        "bill_commission_amount": 4045400000,
+        "bill_ppp_amount": 0,
+        "clawback_shopee_commission": 0,
+        "clawback_seller_commission": 0,
+        "seller_commission_management_fee": 0,
+        "shopee_commission_management_fee": 0
+      },
+      {
+        "bills": [
+          {
+            "validated_brand_commission": 913100000,
+            "validated_brand_commission_dis": "9131",
+            "eligible_shopee_commission": 0,
+            "eligible_shopee_commission_dis": "0",
+            "eligible_total_commission": 913100000,
+            "eligible_total_commission_dis": "9131",
+            "order_placed_month": 0,
+            "order_quantity": 4,
+            "wht_amount_dis": "0",
+            "vat_amount_dis": "0",
+            "wht_amount": 0,
+            "vat_amount": 0,
+            "sst_amount_dis": "",
+            "sst_amount": 0,
+            "validation_status": 3,
+            "rejected_reason": "",
+            "receipt_status": 1,
+            "invoice_status": 1,
+            "invoice_dismiss_reason": "",
+            "total_payment_amount": 913100000,
+            "total_payment_amount_dis": "9131",
+            "bill_type": 1,
+            "bonus_description": "",
+            "brand_taxation_based_amount": 0,
+            "brand_taxation_based_amount_dis": "0",
+            "shopee_taxation_based_amount": 0,
+            "shopee_taxation_based_amount_dis": "0",
+            "total_taxation_based_amount": 0,
+            "total_taxation_based_amount_dis": "0",
+            "payable_commission": 913100000,
+            "payable_commission_dis": "9131",
+            "history_total_commission_amount": 0,
+            "history_total_commission_amount_dis": "",
+            "eligible_ppp_fee": 0,
+            "eligible_ppp_fee_dis": "",
+            "complete_period_start_time": 0,
+            "complete_period_end_time": 0
+          }
+        ],
+        "payment_shopee_adjustment_list": [],
+        "service_fees": [
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000013,
+                "base_tax_amount": 8948380,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 650791,
+                "fee_tax_amount_rounded": 700000
+              }
+            },
+            "validation_id": "DEMO_VAL_0004",
+            "order_placed_month": 0,
+            "bill_source": 7,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 8948380,
+            "service_fee_rounded": 8900000,
+            "pre_tax_service_fee": 9599171,
+            "pre_tax_service_fee_rounded": 9600000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000013,
+                "base_tax_amount": 8948380,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 650791,
+                "fee_tax_amount_rounded": 700000
+              }
+            },
+            "validation_id": "DEMO_VAL_0004",
+            "order_placed_month": 0,
+            "bill_source": 6,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 8948380,
+            "service_fee_rounded": 8900000,
+            "pre_tax_service_fee": 9599171,
+            "pre_tax_service_fee_rounded": 9600000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000013,
+                "base_tax_amount": 8948380,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 650791,
+                "fee_tax_amount_rounded": 700000
+              }
+            },
+            "validation_id": "DEMO_VAL_0004",
+            "order_placed_month": 0,
+            "bill_source": 5,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 8948380,
+            "service_fee_rounded": 8900000,
+            "pre_tax_service_fee": 9599171,
+            "pre_tax_service_fee_rounded": 9600000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000013,
+                "base_tax_amount": 8948380,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 650791,
+                "fee_tax_amount_rounded": 700000
+              }
+            },
+            "validation_id": "DEMO_VAL_0004",
+            "order_placed_month": 0,
+            "bill_source": 2,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 8948380,
+            "service_fee_rounded": 8900000,
+            "pre_tax_service_fee": 9599171,
+            "pre_tax_service_fee_rounded": 9600000
+          }
+        ],
+        "validation_id": "DEMO_VAL_0004",
+        "is_mcn": 0,
+        "with_vat": false,
+        "with_wht": true,
+        "with_sst": false,
+        "validation_month": 202610,
+        "payment_month": 0,
+        "invoice_dismiss_reason": "",
+        "payment_status": 8,
+        "invoice_status": 0,
+        "total_payment_amount": 904200000,
+        "total_payment_amount_dis": "9042",
+        "account_type": 3,
+        "order_completed_period_start_time": 1791046800,
+        "order_completed_period_end_time": 1791133199,
+        "isoweek": 41,
+        "payment_channel": 0,
+        "payment_rejected_reason": "",
+        "paid_failed_reason_type": 601,
+        "validation_period_start_time": 1791133200,
+        "validation_period_end_time": 1791219599,
+        "overall_validation_status": 3,
+        "payment_file_status": 0,
+        "payment_period_start_time": 0,
+        "payment_period_end_time": 0,
+        "unable_to_pay_detail_status": 0,
+        "transfer_status": 1,
+        "payment_time": 0,
+        "settlement_cycle": 4,
+        "validation_review_time": 1791170070,
+        "payout_id": "DEMO_PAYOUT_0004",
+        "eligible_total_amount": 913100000,
+        "eligible_total_amount_dis": "9131",
+        "brand_commission": 913100000,
+        "brand_commission_dis": "9131",
+        "shopee_commission": 0,
+        "shopee_commission_dis": "0",
+        "bonus_commission": 0,
+        "bonus_commission_dis": "0",
+        "mcn_management_fee": 0,
+        "mcn_management_fee_dis": "0",
+        "validation_payout_status": 2,
+        "payout_created_time": 1791399640,
+        "payment_completed_time": 1791864518,
+        "payment_shopee_adjustment": 0,
+        "service_fee_invoice_status": 0,
+        "service_fee_invoice_dismiss_reason": "",
+        "bill_total_amount": 904200000,
+        "bill_commission_amount": 904200000,
+        "bill_ppp_amount": 0,
+        "clawback_shopee_commission": 0,
+        "clawback_seller_commission": 0,
+        "seller_commission_management_fee": 0,
+        "shopee_commission_management_fee": 0
+      },
+      {
+        "bills": [
+          {
+            "validated_brand_commission": 225000000,
+            "validated_brand_commission_dis": "2250",
+            "eligible_shopee_commission": 62500000,
+            "eligible_shopee_commission_dis": "625",
+            "eligible_total_commission": 287500000,
+            "eligible_total_commission_dis": "2875",
+            "order_placed_month": 0,
+            "order_quantity": 3,
+            "wht_amount_dis": "0",
+            "vat_amount_dis": "0",
+            "wht_amount": 0,
+            "vat_amount": 0,
+            "sst_amount_dis": "",
+            "sst_amount": 0,
+            "validation_status": 3,
+            "rejected_reason": "",
+            "receipt_status": 1,
+            "invoice_status": 1,
+            "invoice_dismiss_reason": "",
+            "total_payment_amount": 287500000,
+            "total_payment_amount_dis": "2875",
+            "bill_type": 1,
+            "bonus_description": "",
+            "brand_taxation_based_amount": 0,
+            "brand_taxation_based_amount_dis": "0",
+            "shopee_taxation_based_amount": 0,
+            "shopee_taxation_based_amount_dis": "0",
+            "total_taxation_based_amount": 0,
+            "total_taxation_based_amount_dis": "0",
+            "payable_commission": 287500000,
+            "payable_commission_dis": "2875",
+            "history_total_commission_amount": 0,
+            "history_total_commission_amount_dis": "",
+            "eligible_ppp_fee": 0,
+            "eligible_ppp_fee_dis": "",
+            "complete_period_start_time": 0,
+            "complete_period_end_time": 0
+          }
+        ],
+        "payment_shopee_adjustment_list": [],
+        "service_fees": [
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000025,
+                "base_tax_amount": 2817500,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 204908,
+                "fee_tax_amount_rounded": 200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0005",
+            "order_placed_month": 0,
+            "bill_source": 7,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 2817500,
+            "service_fee_rounded": 2800000,
+            "pre_tax_service_fee": 3022408,
+            "pre_tax_service_fee_rounded": 3000000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000025,
+                "base_tax_amount": 2817500,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 204908,
+                "fee_tax_amount_rounded": 200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0005",
+            "order_placed_month": 0,
+            "bill_source": 6,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 2817500,
+            "service_fee_rounded": 2800000,
+            "pre_tax_service_fee": 3022408,
+            "pre_tax_service_fee_rounded": 3000000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000025,
+                "base_tax_amount": 2817500,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 204908,
+                "fee_tax_amount_rounded": 200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0005",
+            "order_placed_month": 0,
+            "bill_source": 5,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 2817500,
+            "service_fee_rounded": 2800000,
+            "pre_tax_service_fee": 3022408,
+            "pre_tax_service_fee_rounded": 3000000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000025,
+                "base_tax_amount": 2205000,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 160363,
+                "fee_tax_amount_rounded": 200000
+              }
+            },
+            "validation_id": "DEMO_VAL_0005",
+            "order_placed_month": 0,
+            "bill_source": 2,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 2205000,
+            "service_fee_rounded": 2200000,
+            "pre_tax_service_fee": 2365363,
+            "pre_tax_service_fee_rounded": 2400000
+          },
+          {
+            "payment_service_fee_tax_map": {
+              "2": {
+                "fee_id": 10000025,
+                "base_tax_amount": 612500,
+                "fee_tax_type": 2,
+                "fee_tax_rate": 8000,
+                "fee_tax_direction": 2,
+                "fee_tax_amount": 44545,
+                "fee_tax_amount_rounded": 0
+              }
+            },
+            "validation_id": "DEMO_VAL_0005",
+            "order_placed_month": 0,
+            "bill_source": 1,
+            "service_fee_rate": 980,
+            "service_fee_cap": 0,
+            "service_fee": 612500,
+            "service_fee_rounded": 600000,
+            "pre_tax_service_fee": 657045,
+            "pre_tax_service_fee_rounded": 700000
+          }
+        ],
+        "validation_id": "DEMO_VAL_0005",
+        "is_mcn": 0,
+        "with_vat": false,
+        "with_wht": true,
+        "with_sst": false,
+        "validation_month": 202609,
+        "payment_month": 0,
+        "invoice_dismiss_reason": "",
+        "payment_status": 8,
+        "invoice_status": 0,
+        "total_payment_amount": 284700000,
+        "total_payment_amount_dis": "2847",
+        "account_type": 3,
+        "order_completed_period_start_time": 1789750800,
+        "order_completed_period_end_time": 1789837199,
+        "isoweek": 38,
+        "payment_channel": 0,
+        "payment_rejected_reason": "",
+        "paid_failed_reason_type": 601,
+        "validation_period_start_time": 1789837200,
+        "validation_period_end_time": 1789923599,
+        "overall_validation_status": 3,
+        "payment_file_status": 0,
+        "payment_period_start_time": 0,
+        "payment_period_end_time": 0,
+        "unable_to_pay_detail_status": 0,
+        "transfer_status": 1,
+        "payment_time": 0,
+        "settlement_cycle": 4,
+        "validation_review_time": 1789891658,
+        "payout_id": "DEMO_PAYOUT_0009",
+        "eligible_total_amount": 287500000,
+        "eligible_total_amount_dis": "2875",
+        "brand_commission": 225000000,
+        "brand_commission_dis": "2250",
+        "shopee_commission": 62500000,
+        "shopee_commission_dis": "625",
+        "bonus_commission": 0,
+        "bonus_commission_dis": "0",
+        "mcn_management_fee": 0,
+        "mcn_management_fee_dis": "0",
+        "validation_payout_status": 2,
+        "payout_created_time": 1789930808,
+        "payment_completed_time": 1790228752,
+        "payment_shopee_adjustment": 0,
+        "service_fee_invoice_status": 0,
+        "service_fee_invoice_dismiss_reason": "",
+        "bill_total_amount": 284700000,
+        "bill_commission_amount": 284700000,
+        "bill_ppp_amount": 0,
+        "clawback_shopee_commission": 0,
+        "clawback_seller_commission": 0,
+        "seller_commission_management_fee": 0,
+        "shopee_commission_management_fee": 0
+      }
+    ],
+    "is_terminated": false,
+    "income_breakdown": {
+      "social_medias": {
+        "seller_commission": {
+          "seller_comm": 24515700000,
+          "seller_comm_dis": "245.157",
+          "seller_comm_normal": 24515700000,
+          "seller_comm_discovery": 0,
+          "seller_comm_conversion": 0
+        },
+        "shopee_commission": {
+          "shopee_comm": 29792500000,
+          "shopee_comm_dis": "297.925",
+          "ordered_in_same_shop": 12508900000,
+          "ordered_in_same_shop_dis": "125.089",
+          "ordered_in_different_shop": 17283600000,
+          "ordered_in_different_shop_dis": "172.836",
+          "shopee_comm_discovery": 0,
+          "shopee_comm_conversion": 0
+        },
+        "bonus_commission": {
+          "bonus_type": [],
+          "bonus_comm": 0,
+          "bonus_comm_dis": "0"
+        },
+        "ppp_commission": {
+          "ppp_comm": 0,
+          "ppp_comm_dis": "0"
+        },
+        "mcn_management_fee": {
+          "mcn_management_fee": 0,
+          "mcn_management_fee_dis": "0"
+        },
+        "service_fee": {
+          "service_fee": 532000000,
+          "service_fee_dis": "5.320"
+        },
+        "seller_commission_adjustment": {
+          "channel_details": [],
+          "seller_comm_adjustment": 0
+        },
+        "shopee_commission_adjustment": {
+          "channel_details": [],
+          "shopee_comm_adjustment": 0
+        }
+      },
+      "shopee_live": {
+        "seller_commission": {
+          "seller_comm": 0,
+          "seller_comm_dis": "0",
+          "seller_comm_normal": 0,
+          "seller_comm_discovery": 0,
+          "seller_comm_conversion": 0
+        },
+        "shopee_commission": {
+          "shopee_comm": 0,
+          "shopee_comm_dis": "0",
+          "ordered_in_same_shop": 0,
+          "ordered_in_same_shop_dis": "0",
+          "ordered_in_different_shop": 0,
+          "ordered_in_different_shop_dis": "0",
+          "shopee_comm_discovery": 0,
+          "shopee_comm_conversion": 0
+        },
+        "bonus_commission": {
+          "bonus_type": [],
+          "bonus_comm": 0,
+          "bonus_comm_dis": "0"
+        },
+        "ppp_commission": {
+          "ppp_comm": 0,
+          "ppp_comm_dis": ""
+        },
+        "mcn_management_fee": {
+          "mcn_management_fee": 0,
+          "mcn_management_fee_dis": "0"
+        },
+        "service_fee": {
+          "service_fee": 0,
+          "service_fee_dis": "0"
+        },
+        "seller_commission_adjustment": {
+          "channel_details": [],
+          "seller_comm_adjustment": 0
+        },
+        "shopee_commission_adjustment": {
+          "channel_details": [],
+          "shopee_comm_adjustment": 0
+        }
+      },
+      "shopee_video": {
+        "seller_commission": {
+          "seller_comm": 826118500000,
+          "seller_comm_dis": "8.261.185",
+          "seller_comm_normal": 667178100000,
+          "seller_comm_discovery": 2544700000,
+          "seller_comm_conversion": 156395700000
+        },
+        "shopee_commission": {
+          "shopee_comm": 1766700000,
+          "shopee_comm_dis": "17.667",
+          "ordered_in_same_shop": 1554600000,
+          "ordered_in_same_shop_dis": "15.546",
+          "ordered_in_different_shop": 0,
+          "ordered_in_different_shop_dis": "0",
+          "shopee_comm_discovery": 0,
+          "shopee_comm_conversion": 212100000
+        },
+        "bonus_commission": {
+          "bonus_type": [],
+          "bonus_comm": 0,
+          "bonus_comm_dis": "0"
+        },
+        "ppp_commission": {
+          "ppp_comm": 0,
+          "ppp_comm_dis": ""
+        },
+        "mcn_management_fee": {
+          "mcn_management_fee": 0,
+          "mcn_management_fee_dis": "0"
+        },
+        "service_fee": {
+          "service_fee": 8113700000,
+          "service_fee_dis": "81.137"
+        },
+        "seller_commission_adjustment": {
+          "channel_details": [],
+          "seller_comm_adjustment": 0
+        },
+        "shopee_commission_adjustment": {
+          "channel_details": [],
+          "shopee_comm_adjustment": 0
+        }
+      },
+      "total_payment_amount": 873547700000,
+      "total_payment_amount_dis": "8.735.477",
+      "social_medias_commission": 53776200000,
+      "social_medias_commission_dis": "537.762",
+      "shopee_live_commission": 0,
+      "shopee_live_commission_dis": "0",
+      "shopee_video_commission": 819771500000,
+      "shopee_video_commission_dis": "8.197.715",
+      "service_fee": 8645700000,
+      "service_fee_dis": "86.457"
+    },
+    "pending_payout_amount": 1721600000,
+    "pending_payout_amount_dis": "17216"
+  }
+}

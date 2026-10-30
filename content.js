@@ -1,43 +1,45 @@
 /* -------------------------------------------- */
-/* Shopee Voucher Saver - Auto click Lưu button */
+/* Shopee Voucher Saver - Auto click Luu button */
 /* -------------------------------------------- */
 
-// Scroll to bottom to load all vouchers
-window.scrollTo(0, document.body.scrollHeight);
-
-// Find all span elements with text 'Lưu'
-var spans = document.getElementsByTagName('span');
-var spanVouchers = Array.from(spans).filter(span => span.textContent.trim() === 'Lưu');
-
-// Find all button elements with text 'Lưu'
-var buttons = document.getElementsByTagName('button');
-var buttonVouchers = Array.from(buttons).filter(button => button.textContent.trim() === 'Lưu');
-
-// Combine both arrays
-var vouchers = [...spanVouchers, ...buttonVouchers];
-
-if (vouchers.length === 0) {
-    alert("⚠️ No vouchers found!");
-} else {
-    var delay = 1500;
-    var i = 0;
-
-    function saveVoucher() {
-        if (i === vouchers.length) {
-            console.log('✅ Finished saving all vouchers!');
-            alert(`🎉 Done! Saved ${vouchers.length} vouchers successfully.`);
-            return;
-        }
-
-        var remaining = ((vouchers.length - i) * (delay + 500) / 1000).toFixed(0);
-        console.log(`Click --> Save Voucher ${i + 1} of ${vouchers.length}, ~${remaining}s remaining…`);
-
-        vouchers[i].click();
-        i++;
-        setTimeout(saveVoucher, Math.floor(500 + Math.random() * delay * 2));
+(async () => {
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    console.log(`Found ${vouchers.length} vouchers. Starting...`);
-    alert(`🔍 Found ${vouchers.length} vouchers. Starting to save...`);
-    saveVoucher();
-}
+    function getVoucherElements() {
+        var spans = document.getElementsByTagName("span");
+        var spanVouchers = Array.from(spans).filter(span => span.textContent.trim() === "Lưu");
+
+        var buttons = document.getElementsByTagName("button");
+        var buttonVouchers = Array.from(buttons).filter(button => button.textContent.trim() === "Lưu");
+
+        return [...spanVouchers, ...buttonVouchers];
+    }
+
+    window.scrollTo(0, document.body.scrollHeight);
+    await sleep(900);
+
+    var vouchers = getVoucherElements();
+    if (vouchers.length === 0) {
+        return {
+            ok: false,
+            message: "Khong tim thay voucher nao co the luu tren trang hien tai."
+        };
+    }
+
+    var delay = 1500;
+    for (var i = 0; i < vouchers.length; i++) {
+        var remaining = ((vouchers.length - i) * (delay + 500) / 1000).toFixed(0);
+        console.log("Click --> Save Voucher " + (i + 1) + " of " + vouchers.length + ", ~" + remaining + "s remaining...");
+        vouchers[i].click();
+        await sleep(Math.floor(500 + Math.random() * delay * 2));
+    }
+
+    console.log("Finished saving all vouchers.");
+    return {
+        ok: true,
+        savedCount: vouchers.length,
+        message: "Da luu " + vouchers.length + " voucher thanh cong."
+    };
+})();
